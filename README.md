@@ -2,8 +2,6 @@
 
 Standalone Vault authentication using an SSH agent or JWT, with encrypted token
 caching. Native Go binaries for Windows and Linux, plus a Node module and CLI.
-Authentication only: no identity-profile or secret/environment expansion,
-shell installation, or child process execution.
 
 ## Install
 
@@ -29,7 +27,7 @@ npm install -g 'git+ssh://git@github.com/131/vauth-login.git#v1.0.0'
 
 ```bash
 vauth-login                 # stdout: token; stderr: status and remaining validity
-vauth-login --renew         # force a fresh login (not merely a lease renewal)
+vauth-login --renew         # force a fresh login
 vauth-login --source        # stdout: export VAULT_TOKEN='…'
 vauth-login version         # release/build version, without authenticating
 ```
@@ -52,9 +50,8 @@ fi
 ## Configuration
 
 The first existing file wins: `VAUTHRC`, `./.vauthrc`, then `~/.vauthrc`.
-`VAULT_ADDR` is the fallback when `vault_addr` is absent. `env.*` is ignored,
-including malformed or hostile environment-map keys. Authentication fields support `$${env.NAME}`
-substitution from the process environment, not profile or secret expansion.
+`VAULT_ADDR` supplies the default Vault address. Authentication fields support
+`$${env.NAME}` substitution from the process environment.
 
 ```yaml
 vault_addr: https://vault.example.test
@@ -65,14 +62,11 @@ ssh_auth:
 token_cache: true
 ```
 
-Recognized keys: `vault_addr`, `ssh_auth`, `jwt_auth`, and `token_cache`.
-All other configuration sections are ignored; local encrypted secret files and
-secret/environment expansion are outside this package’s scope.
+Configuration keys: `vault_addr`, `ssh_auth`, `jwt_auth`, and `token_cache`.
 
 SSH authentication uses `SSH_AUTH_SOCK`. Without it, the native Windows binary
-autodiscovers the Pageant (0.75+) named pipe, then the OpenSSH agent pipe. It does
-not use WM_COPYDATA or an external signing helper. Without an agent, disk caching
-is disabled; JWT authentication can still work. The Node implementation uses
+autodiscovers the Pageant (0.75+) named pipe, then the OpenSSH agent pipe.
+Disk caching requires an SSH agent; JWT authentication can still work. The Node implementation uses
 ssh2's Pageant transport when no Windows socket is configured.
 
 ## Token lifecycle and cache
@@ -102,14 +96,13 @@ successful login. `token_cache: false` disables cache access entirely.
 ## API and tests
 
 See [API_and_tests.md](API_and_tests.md) for Node/Go APIs, transport and test details.
-Both APIs expose connection, token lookup and Vault HTTP transport so consumers
-can share the authentication boundary without reimplementing it.
+Both APIs expose connection, token lookup and Vault HTTP transport for use by
+other applications.
 
 ## Security boundary
 
-A configuration file chooses the Vault origin and authentication role. This
-package uses the configuration precedence described above; it does not make a
-cloned repository's `.vauthrc` trustworthy. Review it before permitting SSH-agent signing.
+The selected configuration file determines the Vault origin and authentication
+role. Review it before permitting SSH-agent signing.
 Whoever controls the agent socket can decrypt its caches. Tokens are bearer
 credentials: don't log stdout, enable shell tracing around exports, or store tokens
 in plaintext files.
@@ -119,8 +112,7 @@ including the response body. HTTP errors expose status/body to programmatic
 callers, but their printable messages omit bodies to avoid echoing credentials.
 Go callers overriding `HTTPClient` own its redirect/timeout policy. Cache reuse
 intentionally does not check revocation online; use `LookupSelf`/`lookupSelf` when
-that validation is needed. It is a Vault client, not a replacement for Vault's
-server-side authorization.
+that validation is needed. Vault enforces server-side authorization.
 
 ## Credits
 

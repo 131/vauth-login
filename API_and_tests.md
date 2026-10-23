@@ -13,19 +13,21 @@ const {status, body} = await client.request(
 );
 ```
 
-`login(source = false, renew = false)` returns the token or a bash export string;
-it does not exit the process. `version()` returns the package version.
+`login(source = false, renew = false)` returns the token or a bash export string.
+`version()` returns the package version.
 `vaultURL(path)` constructs an API URL under the configured Vault `/v1/`.
 `request(method, path, token = '', payload = null, expect = 200)` sends JSON when
 payload is non-null and returns `{status, body}` (a Buffer). Set `expect = 0` to
-handle the status yourself. No automatic retry or redirect is performed.
+handle the status yourself. Each call makes a request to the configured Vault
+origin; redirects are returned to the caller as HTTP responses.
 `requestTimeout` can override the 60-second deadline in milliseconds.
 
 `VauthLogin.HTTPError` has `status`, `body`, and compatibility
 `res.statusCode` fields. Its message contains only the status, not the body.
 
-The client exposes `rc`, `VAULT_ADDR`, and `VAULT_TOKEN`. `connect()` can return undefined when authentication
-is unavailable; CLI/login output instead rejects an empty token.
+The client exposes `rc`, `VAULT_ADDR`, and `VAULT_TOKEN`. `connect()` returns
+undefined when authentication is unavailable; CLI/login output rejects an empty
+token.
 
 ## Go
 
@@ -64,9 +66,9 @@ One client announces status once per connection unless forced to log in again.
 - `--ir://json`: emit a JSON string; `--source` takes precedence.
 - `version`, `--version`: emit the version without loading credentials.
 - `--help`, `help`: usage; no authentication.
-- Errors: nonzero exit, no token on stdout. No environment/profile commands.
+- Errors: nonzero exit, diagnostics on stderr.
 
-Go release versions include the `v` tag prefix; Node's package version does not.
+Go release versions use the `v` tag prefix; Node uses the package semver.
 
 ## Verification
 
@@ -84,14 +86,15 @@ GOOS=windows GOARCH=amd64 go build ./cmd/vauth-login
 The authentication/cache suites create an isolated SSH agent
 with a throwaway Ed25519 key and a loopback fake Vault; no real Vault or user
 credentials are needed. Linux needs `ssh-agent`, `ssh-keygen`, and `ssh-add`.
-The Windows CI job cross-checks the native build; actual Pageant login is an
-installation-level check, not a fake Windows unit-test claim.
+Windows CI checks the native build. Installation validation exercises Pageant
+login on Windows.
 
 Coverage includes cache isolation and format compatibility, encrypted-only disk
 storage, cache disabled/missing/corrupt/expired/unwritable, unlimited lifetime,
 lease thresholds and renewal baseline, forced login, inherited credentials,
 400/403 reauthentication, server failures, key selection, status/output secrecy,
-configuration precedence and ignored env.*, public lookup/HTTP APIs, redirect
+configuration precedence and authentication configuration, public lookup/HTTP
+APIs, redirect
 rejection and Node body deadlines. CLI subprocess tests check default and aliases,
 source/JSON output, renewal, caching and argument errors.
 
