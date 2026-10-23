@@ -80,7 +80,22 @@ ssh_auth:
 token_cache: true
 ```
 
-Configuration keys: `vault_addr`, `ssh_auth`, `jwt_auth`, and `token_cache`.
+Configuration keys: `vault_addr`, `ssh_auth`, `jwt_auth`, `token_cache`, and
+`known_vaults`.
+
+A `./.vauthrc` belongs to the project; `~/.vauthrc` belongs to the user. Before
+the first request to a Vault selected by a project file, the user must vouch
+for that address: either it is the `vault_addr` of `~/.vauthrc`, or it is
+listed in its `known_vaults`. Otherwise `vauth-login` asks `Continue? [y/N]`
+once on the terminal, and refuses without one. `VAUTHRC` and `~/.vauthrc`
+never ask. Reusing a valid cached token makes no request and asks nothing.
+
+```yaml
+# ~/.vauthrc
+known_vaults:
+  - https://vault.example.test
+  - https://vault.partner.example
+```
 
 SSH authentication uses `SSH_AUTH_SOCK`. Without it, the native Windows binary
 autodiscovers the Pageant (0.75+) named pipe, then the OpenSSH agent pipe.
@@ -89,9 +104,9 @@ implementation uses ssh2's Pageant transport when no Windows socket is configure
 
 ## What It Does
 
-The inherited `VAULT_TOKEN` takes priority over the disk cache. When authentication
-is configured, an uncached inherited token is validated with `lookup-self`.
-A usable cached token is reused locally. In the last third of its lease it is
+An inherited `VAULT_TOKEN` is the caller's: it is returned as is, announced as
+`Vauth token: inherited`, and never looked up, renewed or written to the cache.
+Without it, a usable cached token is reused locally. In the last third of its lease it is
 renewed if renewable, otherwise replaced by a fresh login. An expired cache or a
 400/403 from token lookup/renewal triggers login; other lookup/renewal failures
 propagate to the caller. `--renew` forces a fresh login.
@@ -136,6 +151,10 @@ Both reviews converge on the same items: the trust model of a `./.vauthrc`
 found in the current directory, cached tokens trusted until expiry without a
 revocation check, and the Node CLI exiting 0 with an empty token when no
 authentication method is configured. Scores are opinions, not a certification.
+
+Since these reviews, a project `./.vauthrc` pointing at a Vault unknown to
+`~/.vauthrc` requires confirmation (`known_vaults`), and an inherited
+`VAULT_TOKEN` is returned as is instead of being looked up and cached.
 
 ## Credits
 

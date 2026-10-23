@@ -5,6 +5,7 @@ const os   = require('os');
 const fs    = require('fs');
 const path  = require('path');
 const url   = require('url');
+const readline = require('readline');
 const {createHash, randomUUID} = require('crypto');
 const {encrypt, decrypt} = require('ssh-agent-crypt');
 
@@ -32,7 +33,17 @@ const logger  = {
 
 
 const {name : PACKAGE_NAME, version : VERSION} = require('./package.json');
-const VAUTH_RC = [process.env.VAUTHRC, path.join(process.cwd(), ".vauthrc"), path.join(os.homedir(), ".vauthrc")];
+const HOME_RC  = path.join(os.homedir(), ".vauthrc");
+const VAUTH_RC = [process.env.VAUTHRC, path.join(process.cwd(), ".vauthrc"), HOME_RC];
+const RC_KEYS  = ['vault_addr', 'ssh_auth', 'jwt_auth', 'token_cache', 'known_vaults'];
+
+const normalizeAddr = addr => trim(String(addr || ''), '/');
+
+// Read the authentication keys of a .vauthrc, expanding $${env.X} macros.
+function loadRC(file, env = process.env) {
+  const rc = parse(fs.readFileSync(file, 'utf8'));
+  return walk(Object.fromEntries(RC_KEYS.filter(key => rc && Object.hasOwn(rc, key)).map(key => [key, rc[key]])), v => replaceEnv(v, {env}));
+}
 
 class HTTPError extends Error {
   constructor(status, body) {
@@ -61,21 +72,24 @@ class VauthLogin {
     this.rc = {};
 
     let vauth_rc = VAUTH_RC.filter(path => path && fs.existsSync(path))[0];
-    if(vauth_rc) {
-      let body = fs.readFileSync(vauth_rc, 'utf8');
-      let rc = parse(body);
-      let env = process.env;
-
-      this.rc = walk(Object.fromEntries(['vault_addr', 'ssh_auth', 'jwt_auth', 'token_cache']
-        .filter(key => rc && Object.hasOwn(rc, key)).map(key => [key, rc[key]])), v => replaceEnv(v, {env}));
-    }
-
+    if(vauth_rc)
+      this.rc = loadRC(vauth_rc);
+    this.rc_file = vauth_rc;
 
     if(!process.env.SSH_AUTH_SOCK && process.platform !== 'win32')
       this.rc.token_cache = false;
 
     this.VAULT_ADDR = this.rc.vault_addr || process.env.VAULT_ADDR; //might be null
     this.VAULT_TOKEN = process.env.VAULT_TOKEN;
+
+    // A project's ./.vauthrc chooses the Vault; the user vouches for it in
+    // ~/.vauthrc (its vault_addr or its known_vaults list), or is asked.
+    this._unknown_vault = false;
+    if(vauth_rc === VAUTH_RC[1] && vauth_rc !== HOME_RC && this.rc.vault_addr) {
+      const home = fs.existsSync(HOME_RC) ? loadRC(HOME_RC) : {};
+      const known = [home.vault_addr, ...(Array.isArray(home.known_vaults) ? home.known_vaults : [])].map(normalizeAddr);
+      this._unknown_vault = !known.includes(normalizeAddr(this.rc.vault_addr));
+    }
 
 
   }
@@ -86,6 +100,27 @@ class VauthLogin {
 
   version() {
     return VauthLogin.version();
+  }
+
+  // Ask once before the first request to a Vault chosen by ./.vauthrc that
+  // ~/.vauthrc does not know. Without a terminal, refuse.
+  async _trust_vault() {
+    if(!this._unknown_vault)
+      return;
+    const where = `Unknown vault ${normalizeAddr(this.VAULT_ADDR)}, selected by ${this.rc_file}`;
+    const hint = 'Add it to known_vaults in ~/.vauthrc to stop being asked.';
+    if(!process.stdin.isTTY)
+      throw new Error(`${where}. ${hint}`);
+    const rl = readline.createInterface({input : process.stdin, terminal : false});
+    try {
+      process.stderr.write(`${where}.\n${hint}\nContinue? [y/N] `);
+      const answer = await new Promise(resolve => rl.question('', resolve));
+      if(!['y', 'yes'].includes(answer.trim().toLowerCase()))
+        throw new Error(`Unknown vault ${normalizeAddr(this.VAULT_ADDR)}: refused`);
+    } finally {
+      rl.close();
+    }
+    this._unknown_vault = false;
   }
 
   _token_cache_key() {
@@ -142,50 +177,56 @@ class VauthLogin {
   async connect(renew = false) /**
   * @interactive_runner hide
   */ {
+    if(this._connected && !renew)
+      return this.VAULT_TOKEN;
+
+    // An inherited token is the caller's: returned as is, never looked up,
+    // renewed or persisted.
+    if(this.VAULT_TOKEN && !renew) {
+      console.error('Vauth token: inherited');
+      this._connected = true;
+      return this.VAULT_TOKEN;
+    }
+
     const {ssh_auth, jwt_auth} = this.rc;
     if(!ssh_auth && !jwt_auth) {
       this.VAULT_TOKEN = undefined;
       return;
     }
-    if(this._connected && !renew)
-      return this.VAULT_TOKEN;
     this._connected = false;
 
     const cached = await this._read_token_cache();
-    let token = this.VAULT_TOKEN || (cached && cached.token);
+    let token = cached && cached.token;
     const had_token = !!token;
     let metadata, operation = 'reused';
-    if(renew || (cached && token === cached.token && cached.expires_at !== null && cached.expires_at <= Date.now()))
+    if(renew || (cached && cached.expires_at !== null && cached.expires_at <= Date.now()))
       token = undefined;
 
     if(token) {
-      try {
-        if(cached && cached.token === token) {
-          const ttl = cached.expires_at === null ? 0 : (cached.expires_at - Date.now()) / 1000;
-          metadata = {...cached, ttl};
-        } else {
-          metadata = await this._lookup_token(token);
-        }
-        const {ttl, renewable, lease_duration} = metadata;
-        if(ttl > 0 && ttl <= lease_duration / 3) {
-          if(renewable) {
+      const ttl = cached.expires_at === null ? 0 : (cached.expires_at - Date.now()) / 1000;
+      metadata = {...cached, ttl};
+      if(ttl > 0 && ttl <= cached.lease_duration / 3) {
+        if(cached.renewable) {
+          try {
+            await this._trust_vault();
             metadata = await this._renew_token(token);
             token = metadata.client_token;
             operation = 'renewed';
-          } else {
+          } catch(err) {
+            // Reauthenticate on invalid tokens, not network/server failures.
+            const status = err.res && err.res.statusCode;
+            if(![400, 403].includes(status))
+              throw err;
             token = undefined;
           }
+        } else {
+          token = undefined;
         }
-      } catch(err) {
-        // Reauthenticate on invalid tokens, not network/server failures.
-        const status = err.res && err.res.statusCode;
-        if(![400, 403].includes(status))
-          throw err;
-        token = undefined;
       }
     }
 
     if(!token) {
+      await this._trust_vault();
       const agent_path = process.env.SSH_AUTH_SOCK || (process.platform === 'win32' ? 'pageant' : null);
       if(ssh_auth && agent_path) {
         metadata = await this._login_vault_ssh({...ssh_auth}, agent_path);
@@ -200,7 +241,7 @@ class VauthLogin {
     }
 
     if(token) {
-      if(operation !== 'reused' || !cached || cached.token !== token)
+      if(operation !== 'reused')
         await this._save_cached_token(token, metadata);
       this._token_status(operation, metadata);
     }

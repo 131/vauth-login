@@ -19,6 +19,9 @@ type RC struct {
 	SSHAuth    *SSHAuth `yaml:"ssh_auth"`
 	JWTAuth    *JWTAuth `yaml:"jwt_auth"`
 	TokenCache *bool    `yaml:"token_cache"`
+	// KnownVaults lists, in ~/.vauthrc, the Vault addresses a project's
+	// ./.vauthrc may select without confirmation.
+	KnownVaults []string `yaml:"known_vaults"`
 
 	// authKey is the JSON of {ssh_auth, jwt_auth} in document order, as
 	// JSON.stringify would render them: it isolates the token cache.
@@ -254,6 +257,27 @@ func LocateRC(environ map[string]string, cwd, home string) string {
 	return ""
 }
 
+// KnownVault reports whether addr is the vault_addr or one of the
+// known_vaults of the user's ~/.vauthrc at home. A missing or unreadable
+// file knows nothing.
+func KnownVault(addr, home string, environ map[string]string) bool {
+	body, err := os.ReadFile(filepath.Join(home, ".vauthrc"))
+	if err != nil {
+		return false
+	}
+	rc, err := ParseRC(body, "~/.vauthrc", environ)
+	if err != nil {
+		return false
+	}
+	addr = strings.Trim(addr, "/")
+	for _, known := range append([]string{rc.VaultAddr}, rc.KnownVaults...) {
+		if known != "" && strings.Trim(known, "/") == addr {
+			return true
+		}
+	}
+	return false
+}
+
 // ParseRC parses a .vauthrc body and expands its $${env.X} macros against
 // environ. All other configuration sections are ignored.
 func ParseRC(body []byte, file string, environ map[string]string) (*RC, error) {
@@ -271,7 +295,7 @@ func ParseRC(body []byte, file string, environ map[string]string) (*RC, error) {
 	var content []*yaml.Node
 	for i := 0; i+1 < len(root.Content); i += 2 {
 		switch root.Content[i].Value {
-		case "vault_addr", "ssh_auth", "jwt_auth", "token_cache":
+		case "vault_addr", "ssh_auth", "jwt_auth", "token_cache", "known_vaults":
 			content = append(content, root.Content[i], root.Content[i+1])
 		}
 	}

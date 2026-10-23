@@ -51,6 +51,7 @@ func TestCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	inherited := ""
 	call := func(args ...string) (string, string, error) {
 		cmd := exec.Command(exe, append([]string{"-test.run=TestCLIProcess", "--"}, args...)...)
 		cmd.Dir = home
@@ -60,7 +61,7 @@ func TestCLI(t *testing.T) {
 				cmd.Env = append(cmd.Env, entry)
 			}
 		}
-		cmd.Env = append(cmd.Env, "LOGIN_CLI_TEST_PROCESS=1", "HOME="+home, "VAUTHRC="+rc, "SSH_AUTH_SOCK=", "VAULT_TOKEN=")
+		cmd.Env = append(cmd.Env, "LOGIN_CLI_TEST_PROCESS=1", "HOME="+home, "VAUTHRC="+rc, "SSH_AUTH_SOCK=", "VAULT_TOKEN="+inherited)
 		var stderr strings.Builder
 		cmd.Stderr = &stderr
 		out, err := cmd.Output()
@@ -72,6 +73,16 @@ func TestCLI(t *testing.T) {
 			t.Fatalf("%v: stdout=%q stderr=%q err=%v", args, stdout, stderr, err)
 		}
 	}
+	inherited = "inherited-token"
+	stdout, stderr, err := call()
+	if err != nil || stdout != "inherited-token" || stderr != "Vauth token: inherited\n" {
+		t.Fatalf("inherited: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+	}
+	stdout, stderr, err = call("--renew")
+	if err != nil || stdout != "fixture-token" || stderr != "Vauth token: generated · 1h\n" {
+		t.Fatalf("inherited --renew: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+	}
+	inherited = ""
 	for _, args := range [][]string{{"version"}, {"--version"}} {
 		stdout, stderr, err := call(args...)
 		if err != nil || stdout != "v1.0.0\n" || stderr != "" {

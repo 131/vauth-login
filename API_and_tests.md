@@ -31,9 +31,12 @@ Timeouts propagate with `code = 'ETIMEDOUT'`.
 `res.statusCode` fields. `body` is available to SDK callers as a non-enumerable
 property; error logging displays the status.
 
-The client exposes `rc`, `VAULT_ADDR`, and `VAULT_TOKEN`. `connect()` returns
-the token for configured authentication, or undefined when authentication is
-unavailable.
+The client exposes `rc`, `rc_file`, `VAULT_ADDR`, and `VAULT_TOKEN`. `connect()`
+returns an inherited `VAULT_TOKEN` as is, then the token for configured
+authentication, or undefined when authentication is unavailable. When
+`./.vauthrc` selects a Vault that `~/.vauthrc` does not list (`vault_addr` or
+`known_vaults`), `_trust_vault()` prompts once on stderr before the first
+request and rejects without a TTY.
 
 ## Go
 
@@ -47,10 +50,15 @@ metadata, err := client.LookupSelf(token)
 status, body, err := client.Request("GET", "auth/token/lookup-self", token, nil, 200)
 ```
 
-`Vauth` exposes `RC`, `VaultAddr`, `VaultToken`, `Agent`, `TokenCache`, `CacheDir`,
-`Environ`, `Stderr`, `HTTPClient`, and `Now`. `New()` discovers the agent,
-loads configuration and applies the process environment. For tests/embedded use,
-fields may be supplied directly. `Connect(renew)` returns the token to its caller.
+`Vauth` exposes `RC`, `RCFile`, `VaultAddr`, `VaultToken`, `Agent`, `TokenCache`,
+`CacheDir`, `Environ`, `Stderr`, `HTTPClient`, `Confirm`, and `Now`. `New()`
+discovers the agent, loads configuration, applies the process environment and
+marks a Vault selected by `./.vauthrc` as unknown unless `KnownVault(addr, home,
+environ)` finds it in `~/.vauthrc`. For tests/embedded use, fields may be supplied
+directly. `Connect(renew)` returns the token to its caller; an inherited
+`VaultToken` is returned as is unless `renew` is set. Before the first request to
+an unknown Vault, `Confirm(addr, file)` is called once; it defaults to a
+`Continue? [y/N]` prompt on the terminal and to a refusal without one.
 
 `LookupSelf(token)` validates online and returns `*LookupToken` with `TTL`,
 `Renewable`, `CreationTTL`, `EntityID`, and `LeaseDuration`.
@@ -66,7 +74,7 @@ One client announces status once per connection unless forced to log in again.
 ## CLI contract (both implementations)
 
 - Default, `login`, `connect`: authenticate and emit the token without a newline.
-- `--renew`: force login instead of reusing inherited/cache credentials.
+- `--renew`: force login instead of returning inherited/cache credentials.
 - `version`, `--version`: emit the version without loading credentials.
 - `--help`, `help`: command help. Go prints usage on stdout; Node prints the
   cnyks-generated command list on stderr.
@@ -99,8 +107,9 @@ login on Windows.
 
 Coverage includes cache isolation and format compatibility, encrypted-only disk
 storage, cache disabled/missing/corrupt/expired/unwritable, unlimited lifetime,
-lease thresholds and renewal baseline, forced login, inherited credentials,
-400/403 reauthentication, server failures, key selection, status/output secrecy,
+lease thresholds and renewal baseline, forced login, inherited credentials
+returned as is, unknown project Vault confirmation (`known_vaults`, prompt,
+refusal, no TTY, cache reuse without prompt), 400/403 reauthentication, server failures, key selection, status/output secrecy,
 configuration precedence and authentication configuration, public lookup/HTTP
 APIs, redirect rejection and Node request deadlines. CLI subprocess tests check default and aliases,
 raw token output, renewal, caching, reflected commands and runner help.

@@ -3,6 +3,7 @@
 package vauthlogin
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,8 +46,15 @@ type Vauth struct {
 	HTTPClient *http.Client
 	// Now overrides the clock (tests).
 	Now func() time.Time
+	// RCFile is the configuration file New selected, if any.
+	RCFile string
+	// Confirm is asked once before the first request to a Vault selected by
+	// a project's ./.vauthrc that ~/.vauthrc does not know; nil prompts on
+	// the terminal and refuses without one.
+	Confirm func(addr, file string) (bool, error)
 
-	connected bool
+	connected    bool
+	unknownVault bool
 }
 
 // token is an established token with its remaining validity.
@@ -126,6 +134,11 @@ func New() (*Vauth, error) {
 			return nil, err
 		}
 		v.RC = *rc
+		v.RCFile = file
+		// A project's ./.vauthrc chooses the Vault; the user vouches for it in ~/.vauthrc.
+		if file == filepath.Join(cwd, ".vauthrc") && file != filepath.Join(home, ".vauthrc") && rc.VaultAddr != "" {
+			v.unknownVault = !KnownVault(rc.VaultAddr, home, environ)
+		}
 	}
 	if v.RC.TokenCache != nil && !*v.RC.TokenCache {
 		v.TokenCache = false
@@ -164,6 +177,40 @@ func (v *Vauth) debug(format string, args ...any) {
 	}
 }
 
+// trustVault asks once before the first request to an unknown Vault.
+func (v *Vauth) trustVault() error {
+	if !v.unknownVault {
+		return nil
+	}
+	addr := strings.Trim(v.VaultAddr, "/")
+	confirm := v.Confirm
+	if confirm == nil {
+		confirm = v.promptVault
+	}
+	ok, err := confirm(addr, v.RCFile)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("Unknown vault %s: refused", addr)
+	}
+	v.unknownVault = false
+	return nil
+}
+
+const knownVaultsHint = "Add it to known_vaults in ~/.vauthrc to stop being asked."
+
+func (v *Vauth) promptVault(addr, file string) (bool, error) {
+	where := fmt.Sprintf("Unknown vault %s, selected by %s", addr, file)
+	if info, err := os.Stdin.Stat(); err != nil || info.Mode()&os.ModeCharDevice == 0 {
+		return false, fmt.Errorf("%s. %s", where, knownVaultsHint)
+	}
+	fmt.Fprintf(v.stderr(), "%s.\n%s\nContinue? [y/N] ", where, knownVaultsHint)
+	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	answer = strings.ToLower(strings.TrimSpace(answer))
+	return answer == "y" || answer == "yes", nil
+}
+
 func (v *Vauth) tokenStatus(operation string, token *token) {
 	validity := "valid indefinitely"
 	if token.TTL != 0 {
@@ -172,53 +219,46 @@ func (v *Vauth) tokenStatus(operation string, token *token) {
 	fmt.Fprintf(v.stderr(), "Vauth token: %s · %s\n", operation, validity)
 }
 
-// Connect establishes VaultToken: the environment token, then the cached one
-// (renewed in the last third of its lease), then a new login. With renew, a
-// new login is forced. Without an authentication method, no token is used.
+// Connect establishes VaultToken: an inherited token is returned as is;
+// otherwise the cached one (renewed in the last third of its lease), then a
+// new login. With renew, a new login is forced. Without an authentication
+// method, no token is used.
 func (v *Vauth) Connect(renew bool) (string, error) {
+	if v.connected && !renew {
+		return v.VaultToken, nil
+	}
+	// An inherited token is the caller's: never looked up, renewed or persisted.
+	if v.VaultToken != "" && !renew {
+		fmt.Fprintln(v.stderr(), "Vauth token: inherited")
+		v.connected = true
+		return v.VaultToken, nil
+	}
 	if v.RC.SSHAuth == nil && v.RC.JWTAuth == nil {
 		v.VaultToken = ""
 		return "", nil
 	}
-	if v.connected && !renew {
-		return v.VaultToken, nil
-	}
 	v.connected = false
 
 	cached := v.readTokenCache()
-	current := v.VaultToken
-	if current == "" && cached != nil {
-		current = cached.Token
-	}
-	hadToken := current != ""
+	hadToken := cached != nil
 	operation := "reused"
 	now := v.now().UnixMilli()
-	if renew || (cached != nil && current == cached.Token && cached.ExpiresAt != nil && *cached.ExpiresAt <= now) {
-		current = ""
+	if renew || (cached != nil && cached.ExpiresAt != nil && *cached.ExpiresAt <= now) {
+		cached = nil
 	}
 
 	var established *token
-	if current != "" {
-		established = &token{Value: current}
-		if cached != nil && cached.Token == current {
-			established.LeaseDuration, established.Renewable = cached.LeaseDuration, cached.Renewable
-			if cached.ExpiresAt != nil {
-				established.TTL = float64(*cached.ExpiresAt-now) / 1000
-			}
-		} else {
-			info, lease, err := v.lookupToken(current)
-			if err := reauthenticable(err); err != nil {
-				return "", err
-			}
-			if err != nil {
-				established = nil
-			} else {
-				established.TTL, established.Renewable, established.LeaseDuration = info.TTL, info.Renewable, lease
-			}
+	if cached != nil {
+		established = &token{Value: cached.Token, LeaseDuration: cached.LeaseDuration, Renewable: cached.Renewable}
+		if cached.ExpiresAt != nil {
+			established.TTL = float64(*cached.ExpiresAt-now) / 1000
 		}
-		if established != nil && established.TTL > 0 && established.TTL <= float64(established.LeaseDuration)/3 {
+		if established.TTL > 0 && established.TTL <= float64(established.LeaseDuration)/3 {
 			if established.Renewable {
-				renewed, err := v.renewToken(current)
+				if err := v.trustVault(); err != nil {
+					return "", err
+				}
+				renewed, err := v.renewToken(cached.Token)
 				if err := reauthenticable(err); err != nil {
 					return "", err
 				}
@@ -235,6 +275,9 @@ func (v *Vauth) Connect(renew bool) (string, error) {
 	}
 
 	if established == nil {
+		if err := v.trustVault(); err != nil {
+			return "", err
+		}
 		var granted *auth
 		var err error
 		if v.RC.SSHAuth != nil && v.Agent != "" {
@@ -261,7 +304,7 @@ func (v *Vauth) Connect(renew bool) (string, error) {
 
 	v.VaultToken = ""
 	if established != nil {
-		if operation != "reused" || cached == nil || cached.Token != established.Value {
+		if operation != "reused" {
 			v.saveTokenCache(established)
 		}
 		v.tokenStatus(operation, established)

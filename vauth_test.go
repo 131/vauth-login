@@ -289,35 +289,37 @@ func TestRejectedRenewalTriggersLogin(t *testing.T) {
 }
 
 func TestServerFailuresDoNotGenerateTokens(t *testing.T) {
-	f := newFixture(t, fixtureOptions{lookupStatus: 500})
+	f := newFixture(t, fixtureOptions{ttl: seconds(hour), renewStatus: 500})
 	v := f.client()
 	f.seed(v, 12*hour)
-	v.VaultToken = "uncached-token"
 	for i := 0; i < 2; i++ {
 		if _, err := v.Connect(false); err == nil {
 			t.Fatal("connect should fail")
 		}
 	}
-	equalPaths(t, f.paths(), "/v1/auth/token/lookup-self", "/v1/auth/token/lookup-self")
-
-	f = newFixture(t, fixtureOptions{ttl: seconds(hour), renewStatus: 500})
-	v = f.client()
-	f.seed(v, 12*hour)
-	if _, err := v.Connect(false); err == nil {
-		t.Fatal("connect should fail")
-	}
-	equalPaths(t, f.paths(), "/v1/auth/token/renew-self")
+	equalPaths(t, f.paths(), "/v1/auth/token/renew-self", "/v1/auth/token/renew-self")
+	equal(t, f.read(v).Token, "cached-token")
 }
 
-func TestEnvironmentTokenRespectedAndCached(t *testing.T) {
-	f := newFixture(t, fixtureOptions{})
+func TestEnvironmentTokenReturnedAsIs(t *testing.T) {
+	f := newFixture(t, fixtureOptions{lookupStatus: 500, renewStatus: 500})
 	v := f.client()
 	f.seed(v, 12*hour)
 	v.VaultToken = "environment-token"
+	var stderr bytes.Buffer
+	v.Stderr = &stderr
 	equal(t, connect(t, v, false), "environment-token")
-	equal(t, f.read(v).Token, "environment-token")
-	equal(t, f.requests[0].Token, "environment-token")
-	equal(t, len(f.requests), 1)
+	equal(t, connect(t, v, false), "environment-token")
+	equal(t, stderr.String(), "Vauth token: inherited\n")
+	equal(t, len(f.requests), 0)
+	equal(t, f.read(v).Token, "cached-token")
+
+	// Without any configuration, an inherited token is still the caller's.
+	v = f.client()
+	v.RC = RC{}
+	v.VaultToken = "environment-token"
+	equal(t, connect(t, v, false), "environment-token")
+	equal(t, len(f.requests), 0)
 }
 
 func TestNonExpiringTokensReused(t *testing.T) {
@@ -410,15 +412,16 @@ func TestUnwritableCacheDoesNotPreventLogin(t *testing.T) {
 	}
 }
 
-func TestWithoutAuthMethodTokensIgnored(t *testing.T) {
+func TestWithoutAuthMethodCachesIgnored(t *testing.T) {
 	f := newFixture(t, fixtureOptions{lookupStatus: 403})
 	v := f.client()
 	f.seed(v, 12*hour)
 	v.RC = RC{}
-	v.VaultToken = "uncached-token"
 	equal(t, connect(t, v, false), "")
 	equal(t, v.VaultToken, "")
+	v.VaultToken = "environment-token"
 	equal(t, connect(t, v, true), "")
+	equal(t, v.VaultToken, "")
 	equal(t, len(f.requests), 0)
 }
 
@@ -546,7 +549,7 @@ func TestTokenCacheDisabled(t *testing.T) {
 	v.TokenCache = false
 	v.VaultToken = "environment-token"
 	equal(t, connect(t, v, false), "environment-token")
-	equalPaths(t, f.paths(), "/v1/auth/token/lookup-self")
+	equal(t, len(f.requests), 0)
 	if _, err := os.Stat(v.TokenCacheFile()); err == nil {
 		t.Fatal("cache written")
 	}
@@ -638,15 +641,89 @@ func TestOneStatusPerConnection(t *testing.T) {
 		connect(t, v, false)
 		equal(t, stderr.String(), fmt.Sprintf("Vauth token: %s · %s\n", c.operation, c.duration))
 	}
-	f := newFixture(t, fixtureOptions{lookupStatus: 500})
+	f := newFixture(t, fixtureOptions{ttl: seconds(hour), renewStatus: 500})
 	v := f.client()
-	v.VaultToken = "uncached-token"
+	f.seed(v, 12*hour)
 	var stderr bytes.Buffer
 	v.Stderr = &stderr
 	if _, err := v.Connect(false); err == nil {
 		t.Fatal("connect should fail")
 	}
 	equal(t, stderr.String(), "")
+}
+
+// A project's ./.vauthrc selecting a Vault unknown to ~/.vauthrc is confirmed
+// once before the first request; VAUTHRC and ~/.vauthrc never ask.
+func TestUnknownVaultConfirmation(t *testing.T) {
+	f := newFixture(t, fixtureOptions{})
+	home, project := t.TempDir(), t.TempDir()
+	environ := map[string]string{}
+	write := func(dir, body string) string {
+		file := filepath.Join(dir, ".vauthrc")
+		if err := os.WriteFile(file, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return file
+	}
+	projectRC := write(project, "vault_addr: "+f.server.URL+"/\njwt_auth: {jwt: test-jwt, role: test-role}\n")
+	load := func() *Vauth {
+		body, _ := os.ReadFile(projectRC)
+		rc, err := ParseRC(body, projectRC, environ)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v := f.client()
+		v.RC, v.RCFile, v.CacheDir = *rc, projectRC, filepath.Join(home, ".vauth", "tokens")
+		v.unknownVault = !KnownVault(rc.VaultAddr, home, environ)
+		return v
+	}
+
+	// No ~/.vauthrc: asked, refused.
+	v := load()
+	var asked []string
+	v.Confirm = func(addr, file string) (bool, error) { asked = append(asked, addr+" "+file); return false, nil }
+	if _, err := v.Connect(false); err == nil || !strings.Contains(err.Error(), "Unknown vault "+f.server.URL+": refused") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	equal(t, len(asked), 1)
+	equal(t, asked[0], f.server.URL+" "+projectRC)
+	equal(t, len(f.requests), 0)
+
+	// Asked once, accepted: login proceeds and later connections do not ask again.
+	v = load()
+	asked = nil
+	v.Confirm = func(addr, file string) (bool, error) { asked = append(asked, addr); return true, nil }
+	equal(t, connect(t, v, false), "fresh-token")
+	equal(t, connect(t, v, true), "fresh-token")
+	equal(t, len(asked), 1)
+
+	// Cached reuse needs no request, so no confirmation.
+	v = load()
+	v.Confirm = func(addr, file string) (bool, error) { t.Fatal("asked"); return false, nil }
+	equal(t, connect(t, v, false), "fresh-token")
+
+	// Known through ~/.vauthrc's own vault_addr, or through known_vaults.
+	write(home, "vault_addr: "+f.server.URL+"\n")
+	equal(t, load().unknownVault, false)
+	write(home, "vault_addr: https://other.example.test\nknown_vaults: ['"+f.server.URL+"/']\n")
+	equal(t, load().unknownVault, false)
+	write(home, "vault_addr: https://other.example.test\n")
+	equal(t, load().unknownVault, true)
+
+	// Without a terminal, the default prompt refuses with the hint.
+	stdin := os.Stdin
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer.Close()
+	os.Stdin = reader
+	t.Cleanup(func() { os.Stdin = stdin; reader.Close() })
+	v = load()
+	if _, err := v.Connect(true); err == nil || !strings.Contains(err.Error(), "known_vaults") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	equalPaths(t, f.paths(), "/v1/auth/jwt/login", "/v1/auth/jwt/login")
 }
 
 func TestReplaceEnv(t *testing.T) {
