@@ -1,0 +1,41 @@
+{
+  "name": "vauth-login",
+  "version": "0.0.0",
+  "description": "Standalone Vault login using ssh-agent or JWT, with encrypted interoperable token caching",
+  "main": "index.js",
+  "bin": {
+    "vauth-login": "./index.js"
+  },
+  "scripts": {
+    "test": "node --test test/token-cache.js",
+    "eslint": "eslint ."
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cnyks": "^3.2.1",
+    "debug": "^4.3.4",
+    "mout": "^1.2.4",
+    "nyks": "^6.15.0",
+    "semver": "^7.5.4",
+    "ssh-agent-crypt": "^1.4.1",
+    "ssh2": "^1.16.0",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "eslint-plugin-ivs": "^4.0.1",
+    "expect.js": "^0.3.1",
+    "mocha": "^3.1.2",
+    "nyc": "^15.0.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:131/vauth-login.git"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "API_and_tests.md"
+  ]
+}

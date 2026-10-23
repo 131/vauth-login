@@ -1,0 +1,8 @@
+/npm-debug.log
+package-lock.json
+
+/node_modules
+/coverage
+/disc
+/dist
+/.gh-actions
