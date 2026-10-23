@@ -107,3 +107,28 @@ func TestProjectVersionChecksOnlyLogin(t *testing.T) {
 		t.Fatal("incompatible version accepted")
 	}
 }
+
+func TestLoginLeaseMustBeExplicit(t *testing.T) {
+	for _, body := range []string{`{}`, `{"auth":null}`, `{"auth":{"client_token":"token"}}`, `{"auth":{"client_token":"token","lease_duration":null}}`, `{"auth":{"client_token":"token","lease_duration":-1}}`} {
+		if _, err := parseAuth([]byte(body), "Invalid Vault login response"); err == nil {
+			t.Fatal("invalid lease accepted")
+		}
+	}
+	for _, body := range []string{`{"auth":{"client_token":"token","lease_duration":0}}`, `{"auth":{"client_token":"token","lease_duration":3600}}`} {
+		if _, err := parseAuth([]byte(body), "Invalid Vault login response"); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestLookupTTLRequired(t *testing.T) {
+	for _, body := range []string{`{"data":{}}`, `{"data":{"ttl":null}}`, `{"data":{"ttl":-1}}`} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(body)) }))
+		v := &Vauth{VaultAddr: server.URL}
+		_, err := v.LookupSelf("token")
+		server.Close()
+		if err == nil {
+			t.Fatal("invalid TTL accepted")
+		}
+	}
+}

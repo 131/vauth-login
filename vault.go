@@ -94,12 +94,16 @@ func (v *Vauth) httpClient() *http.Client {
 
 func parseAuth(response []byte, invalid string) (*auth, error) {
 	var parsed struct {
-		Auth *auth `json:"auth"`
+		Auth *struct {
+			ClientToken   string `json:"client_token"`
+			LeaseDuration *int64 `json:"lease_duration"`
+			Renewable     bool   `json:"renewable"`
+		} `json:"auth"`
 	}
-	if err := json.Unmarshal(response, &parsed); err != nil || parsed.Auth == nil || parsed.Auth.ClientToken == "" || parsed.Auth.LeaseDuration < 0 {
+	if err := json.Unmarshal(response, &parsed); err != nil || parsed.Auth == nil || parsed.Auth.ClientToken == "" || parsed.Auth.LeaseDuration == nil || *parsed.Auth.LeaseDuration < 0 {
 		return nil, errors.New(invalid)
 	}
-	return parsed.Auth, nil
+	return &auth{parsed.Auth.ClientToken, *parsed.Auth.LeaseDuration, parsed.Auth.Renewable}, nil
 }
 
 func (v *Vauth) loginVault(path string, payload any) (*auth, error) {
@@ -175,7 +179,15 @@ func (v *Vauth) lookupToken(token string) (*lookup, int64, error) {
 	var parsed struct {
 		Data *lookup `json:"data"`
 	}
+	var present struct {
+		Data struct {
+			TTL *float64 `json:"ttl"`
+		} `json:"data"`
+	}
 	if err := json.Unmarshal(response, &parsed); err != nil || parsed.Data == nil || parsed.Data.TTL < 0 {
+		return nil, 0, errors.New("Invalid Vault token TTL")
+	}
+	if err := json.Unmarshal(response, &present); err != nil || present.Data.TTL == nil {
 		return nil, 0, errors.New("Invalid Vault token TTL")
 	}
 	lease := parsed.Data.CreationTTL
