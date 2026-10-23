@@ -104,8 +104,8 @@ class VauthLogin {
 
   // Ask once before the first request to a Vault chosen by ./.vauthrc that
   // ~/.vauthrc does not know. Without a terminal, refuse.
-  async _trust_vault() {
-    if(!this._unknown_vault)
+  async _trust_vault(accept = false) {
+    if(!this._unknown_vault || accept)
       return;
     const where = `Unknown vault ${normalizeAddr(this.VAULT_ADDR)}, selected by ${this.rc_file}`;
     const hint = 'Add it to known_vaults in ~/.vauthrc to stop being asked.';
@@ -174,7 +174,7 @@ class VauthLogin {
     console.error('Vauth token: %s · %s', operation, validity);
   }
 
-  async connect(renew = false) /**
+  async connect(renew = false, accept = false) /**
   * @interactive_runner hide
   */ {
     if(this._connected && !renew)
@@ -208,7 +208,7 @@ class VauthLogin {
       if(ttl > 0 && ttl <= cached.lease_duration / 3) {
         if(cached.renewable) {
           try {
-            await this._trust_vault();
+            await this._trust_vault(accept);
             metadata = await this._renew_token(token);
             token = metadata.client_token;
             operation = 'renewed';
@@ -226,7 +226,7 @@ class VauthLogin {
     }
 
     if(!token) {
-      await this._trust_vault();
+      await this._trust_vault(accept);
       const agent_path = process.env.SSH_AUTH_SOCK || (process.platform === 'win32' ? 'pageant' : null);
       if(ssh_auth && agent_path) {
         metadata = await this._login_vault_ssh({...ssh_auth}, agent_path);
@@ -258,11 +258,11 @@ class VauthLogin {
     return auth;
   }
 
-  async login(renew = false) /**
+  async login(renew = false, accept = false) /**
   * Authenticate and return the token
   * @alias connect
   */ {
-    return this.connect(renew);
+    return this.connect(renew, accept);
   }
 
   async _login_vault_ssh({path = 'ssh', role}, agent_path = process.env.SSH_AUTH_SOCK) {

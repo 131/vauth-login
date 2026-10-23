@@ -11,10 +11,11 @@ import (
 	vauthlogin "github.com/131/vauth-login"
 )
 
-const usage = `Usage: vauth-login [--renew]
+const usage = `Usage: vauth-login [--renew] [--accept]
        vauth-login version
 
 Authenticate to Vault and print the token. --renew forces a fresh login.
+--accept trusts the Vault selected by ./.vauthrc without confirmation (CI).
 Login/connect aliases are also accepted.
 `
 
@@ -104,7 +105,7 @@ func run(argv []string) error {
 		return fmt.Errorf("Unexpected positional arguments")
 	}
 	for key := range dict {
-		if key != "renew" {
+		if key != "renew" && key != "accept" {
 			return fmt.Errorf("Unknown flag --%s", key)
 		}
 	}
@@ -113,6 +114,7 @@ func run(argv []string) error {
 	if err != nil {
 		return err
 	}
+	v.Accept = truthy(dict["accept"], dict["accept"] != "")
 	renew := truthy(dict["renew"], dict["renew"] != "")
 	token, err := v.Connect(renew)
 	if err != nil {

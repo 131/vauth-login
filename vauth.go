@@ -52,6 +52,8 @@ type Vauth struct {
 	// a project's ./.vauthrc that ~/.vauthrc does not know; nil prompts on
 	// the terminal and refuses without one.
 	Confirm func(addr, file string) (bool, error)
+	// Accept trusts the selected Vault without confirmation (--accept, CI).
+	Accept bool
 
 	connected    bool
 	unknownVault bool
@@ -179,7 +181,7 @@ func (v *Vauth) debug(format string, args ...any) {
 
 // trustVault asks once before the first request to an unknown Vault.
 func (v *Vauth) trustVault() error {
-	if !v.unknownVault {
+	if !v.unknownVault || v.Accept {
 		return nil
 	}
 	addr := strings.Trim(v.VaultAddr, "/")

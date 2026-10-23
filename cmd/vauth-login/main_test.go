@@ -52,21 +52,41 @@ func TestCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	inherited := ""
+	dir, rcEnv := home, rc
 	call := func(args ...string) (string, string, error) {
 		cmd := exec.Command(exe, append([]string{"-test.run=TestCLIProcess", "--"}, args...)...)
-		cmd.Dir = home
+		cmd.Dir = dir
 		for _, entry := range os.Environ() {
 			key := strings.SplitN(entry, "=", 2)[0]
 			if key != "VAULT_TOKEN" && key != "VAUTHRC" && key != "SSH_AUTH_SOCK" && key != "HOME" && key != "USERPROFILE" && key != "LOGIN_CLI_TEST_PROCESS" {
 				cmd.Env = append(cmd.Env, entry)
 			}
 		}
-		cmd.Env = append(cmd.Env, "LOGIN_CLI_TEST_PROCESS=1", "HOME="+home, "VAUTHRC="+rc, "SSH_AUTH_SOCK=", "VAULT_TOKEN="+inherited)
+		cmd.Env = append(cmd.Env, "LOGIN_CLI_TEST_PROCESS=1", "HOME="+home, "VAUTHRC="+rcEnv, "SSH_AUTH_SOCK=", "VAULT_TOKEN="+inherited)
 		var stderr strings.Builder
 		cmd.Stderr = &stderr
+		cmd.Stdin = strings.NewReader("")
 		out, err := cmd.Output()
 		return string(out), stderr.String(), err
 	}
+
+	// A project ./.vauthrc selecting a Vault unknown to ~/.vauthrc is refused
+	// without a terminal; --accept trusts it (CI).
+	project := t.TempDir()
+	if err := os.WriteFile(filepath.Join(project, ".vauthrc"), body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	home, dir, rcEnv = t.TempDir(), project, ""
+	if stdout, stderr, err := call(); err == nil || stdout != "" || !strings.Contains(stderr, "Unknown vault "+server.URL+", selected by ") || !strings.Contains(stderr, "known_vaults") {
+		t.Fatalf("unknown vault: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+	}
+	if stdout, stderr, err := call("--accept"); err != nil || stdout != "fixture-token" || strings.Contains(stderr, "Unknown vault") {
+		t.Fatalf("--accept: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+	}
+	if stdout, _, err := call("login", "--renew", "--accept"); err != nil || stdout != "fixture-token" {
+		t.Fatalf("--renew --accept: stdout=%q err=%v", stdout, err)
+	}
+	home, dir, rcEnv = filepath.Dir(rc), filepath.Dir(rc), rc
 	for _, args := range [][]string{nil, {"login"}, {"connect"}, {"--renew"}, {"login", "--renew"}, {"connect", "--renew"}} {
 		stdout, stderr, err := call(args...)
 		if err != nil || stdout != "fixture-token" || stderr != "Vauth token: generated · 1h\n" {

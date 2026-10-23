@@ -53,6 +53,13 @@ Force a fresh login:
 vauth-login --renew
 ```
 
+In CI, trust the Vault selected by the project's `./.vauthrc` without the
+confirmation described under Configuration:
+
+```bash
+export VAULT_TOKEN=$(vauth-login --accept)
+```
+
 Check the version or show help:
 
 ```bash
@@ -88,7 +95,8 @@ the first request to a Vault selected by a project file, the user must vouch
 for that address: either it is the `vault_addr` of `~/.vauthrc`, or it is
 listed in its `known_vaults`. Otherwise `vauth-login` asks `Continue? [y/N]`
 once on the terminal, and refuses without one. `VAUTHRC` and `~/.vauthrc`
-never ask. Reusing a valid cached token makes no request and asks nothing.
+never ask; `--accept` never asks either (CI). Reusing a valid cached token
+makes no request and asks nothing.
 
 ```yaml
 # ~/.vauthrc

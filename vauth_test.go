@@ -702,6 +702,13 @@ func TestUnknownVaultConfirmation(t *testing.T) {
 	v.Confirm = func(addr, file string) (bool, error) { t.Fatal("asked"); return false, nil }
 	equal(t, connect(t, v, false), "fresh-token")
 
+	// Accept (--accept, CI) skips the confirmation entirely.
+	v = load()
+	v.Accept = true
+	v.Confirm = func(addr, file string) (bool, error) { t.Fatal("asked"); return false, nil }
+	equal(t, connect(t, v, true), "fresh-token")
+	equal(t, v.unknownVault, true)
+
 	// Known through ~/.vauthrc's own vault_addr, or through known_vaults.
 	write(home, "vault_addr: "+f.server.URL+"\n")
 	equal(t, load().unknownVault, false)
@@ -723,7 +730,7 @@ func TestUnknownVaultConfirmation(t *testing.T) {
 	if _, err := v.Connect(true); err == nil || !strings.Contains(err.Error(), "known_vaults") {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	equalPaths(t, f.paths(), "/v1/auth/jwt/login", "/v1/auth/jwt/login")
+	equalPaths(t, f.paths(), "/v1/auth/jwt/login", "/v1/auth/jwt/login", "/v1/auth/jwt/login")
 }
 
 func TestReplaceEnv(t *testing.T) {

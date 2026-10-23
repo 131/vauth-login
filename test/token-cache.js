@@ -612,7 +612,7 @@ async function projectVault(t, options = {}) {
     fs.writeFileSync(path.join(home, '.vauthrc'), JSON.stringify(options.home(instance.VAULT_ADDR)));
   const cli = path.resolve(__dirname, '..', 'index.js');
   const run = (script, input) => new Promise(resolve => {
-    const child = require('child_process').spawn(process.execPath, script ? ['-e', script] : [cli, 'login'], {
+    const child = require('child_process').spawn(process.execPath, script ? ['-e', script] : [cli, 'login', ...(options.args || [])], {
       cwd : project, env : {...process.env, HOME : home, VAUTHRC : '', VAULT_TOKEN : '', VAULT_ADDR : ''},
     });
     let stdout = '', stderr = '';
@@ -630,6 +630,28 @@ async function projectVault(t, options = {}) {
     new Vauth().login().then(token => process.stdout.write(token), err => { console.error(err.message); process.exit(1); });`;
   return {instance, run, tty, requests, seed, file, addr : instance.VAULT_ADDR};
 }
+
+test('--accept trusts an unknown project vault without a terminal (CI)', async t => {
+  const {run, requests} = await projectVault(t, {rc : {token_cache : false}, args : ['--accept']});
+  const result = await run();
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stdout, 'fresh-token');
+  assert.ok(!result.stderr.includes('Unknown vault'));
+  assert.deepEqual(requests.map(req => req.path), ['/v1/auth/jwt/login']);
+});
+
+test('connect(renew, accept) skips the confirmation and keeps the vault unknown for later calls', async t => {
+  const {client, requests} = await fixture(t);
+  const instance = client();
+  instance.rc.token_cache = false;
+  instance._unknown_vault = true;
+  instance.rc_file = '/project/.vauthrc';
+  await assert.rejects(instance.connect(), /known_vaults/);
+  assert.deepEqual(requests, []);
+  assert.equal(await instance.connect(false, true), 'fresh-token');
+  assert.equal(instance._unknown_vault, true);
+  assert.deepEqual(requests.map(req => req.path), ['/v1/auth/jwt/login']);
+});
 
 test('a project .vauthrc selecting an unknown vault is refused without a terminal, before any request', async t => {
   const {run, requests, addr} = await projectVault(t, {rc : {token_cache : false}});
