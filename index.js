@@ -217,14 +217,11 @@ class VauthLogin {
     return auth;
   }
 
-  async login(source = false, renew = false) /**
-  * Authenticate and return a token or shell export
+  async login(renew = false) /**
+  * Authenticate and return the token
   * @alias connect
   */ {
-    const token = await this.connect(renew);
-    if(!token)
-      throw new Error('Could not login to vault: no authentication method available');
-    return source ? `export VAULT_TOKEN=${shellEscape(token)}\n` : token;
+    return this.connect(renew);
   }
 
   async _login_vault_ssh({path = 'ssh', role}, agent_path = process.env.SSH_AUTH_SOCK) {
@@ -301,18 +298,13 @@ class VauthLogin {
 
 }
 
-const shellEscape = (arg) =>  {
-  // see man bash
-  return "'" + String(arg).replace(/'/g, '\'"\'"\'') + "'";
-};
-
 //ensure module is called directly, i.e. not required
 if(module.parent === null) {
   const {args, dict} = require('nyks/process/parseArgs')();
   let cmd = args.shift() || 'login';
   if(dict.version) cmd = 'version';
   if(dict.help || cmd === 'help') cmd = '?';
-  const flags = [dict['ir://json'] ? '--ir://json' : '--ir://raw'];
+  const flags = ['--ir://raw'];
   if(!dict['ir://run'] && !dict['ir://start']) flags.push(`--ir://run=${cmd}`);
   if(cmd === 'version' || dict['ir://run'] === 'version') flags.push('--ir://static');
   require('cnyks/lib/bundle')(VauthLogin, 'vauth-login', flags);

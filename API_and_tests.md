@@ -13,7 +13,8 @@ const {status, body} = await client.request(
 );
 ```
 
-`login(source = false, renew = false)` returns the token or a bash export string.
+`connect(renew = false)` returns the token. `login(renew = false)` forwards
+that return value.
 `version()` returns the package version.
 `vaultURL(path)` constructs an API URL under the configured Vault `/v1/`.
 `request(method, path, token = '', payload = null, expect = 200)` sends object
@@ -31,8 +32,8 @@ Timeouts propagate with `code = 'ETIMEDOUT'`.
 property; error logging displays the status.
 
 The client exposes `rc`, `VAULT_ADDR`, and `VAULT_TOKEN`. `connect()` returns
-undefined when authentication is unavailable; CLI/login output rejects an empty
-token.
+the token for configured authentication, or undefined when authentication is
+unavailable.
 
 ## Go
 
@@ -47,28 +48,25 @@ status, body, err := client.Request("GET", "auth/token/lookup-self", token, nil,
 ```
 
 `Vauth` exposes `RC`, `VaultAddr`, `VaultToken`, `Agent`, `TokenCache`, `CacheDir`,
-`Environ`, `Stdout`, `Stderr`, `HTTPClient`, and `Now`. `New()` discovers the agent,
+`Environ`, `Stderr`, `HTTPClient`, and `Now`. `New()` discovers the agent,
 loads configuration and applies the process environment. For tests/embedded use,
-fields may be supplied directly. `Login(source, renew)` writes the token/export
-to `Stdout` and rejects missing authentication.
+fields may be supplied directly. `Connect(renew)` returns the token to its caller.
 
 `LookupSelf(token)` validates online and returns `*LookupToken` with `TTL`,
 `Renewable`, `CreationTTL`, `EntityID`, and `LeaseDuration`.
 `Request(method, path, token, payload, expect)` returns `(status, body, error)`;
 `expect = 0` lets the caller handle statuses. `HTTPError` exposes `Status`/`Body`.
 `VaultURL(path)`, `TokenCacheKey()`, `TokenCacheFile()`, `LocateRC`, `ParseRC`,
-`Environ`, `ShellEscape`, and `HumanDiff` support embedding.
+`Environ` and `HumanDiff` support embedding.
 
 `Connect(false)` ignores a token when no auth method is configured and returns an
-empty string without error; `Login` and the CLI instead reject that empty result.
+empty string without error; the native CLI reports that empty result as a failure.
 One client announces status once per connection unless forced to log in again.
 
 ## CLI contract (both implementations)
 
 - Default, `login`, `connect`: authenticate and emit the token without a newline.
 - `--renew`: force login instead of reusing inherited/cache credentials.
-- `--source`: emit a single shell-escaped `export VAULT_TOKEN=…` line.
-- `--ir://json`: emit a JSON string; `--source` takes precedence.
 - `version`, `--version`: emit the version without loading credentials.
 - `--help`, `help`: command help. Go prints usage on stdout; Node prints the
   cnyks-generated command list on stderr.
@@ -76,9 +74,9 @@ One client announces status once per connection unless forced to log in again.
 
 Go release versions use the `v` tag prefix; Node uses the package semver.
 
-The Node CLI delegates method lookup, parameters, aliases and result rendering
-to cnyks. `connect` is a cnyks alias for `login`; `--ir://run=version` and
-`runner:list_commands` use its native runner interface.
+The Node CLI delegates method lookup, parameters, aliases and raw result
+rendering to cnyks (`--ir://raw`). `connect` is a cnyks alias for `login`;
+`--ir://run=version` and `runner:list_commands` use its native runner interface.
 
 ## Verification
 
@@ -105,7 +103,7 @@ lease thresholds and renewal baseline, forced login, inherited credentials,
 400/403 reauthentication, server failures, key selection, status/output secrecy,
 configuration precedence and authentication configuration, public lookup/HTTP
 APIs, redirect rejection and Node request deadlines. CLI subprocess tests check default and aliases,
-source/JSON output, renewal, caching, reflected commands and runner help.
+raw token output, renewal, caching, reflected commands and runner help.
 
 Live installation validation must clear the inherited token, force a new login,
 validate it with Vault `lookup-self`, then invoke the installed binary again with

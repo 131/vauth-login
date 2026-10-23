@@ -494,11 +494,11 @@ test('real CLI reads token_cache false from .vauthrc', async t => {
   fs.writeFileSync(rc, JSON.stringify({vault_addr : instance.VAULT_ADDR, ...instance.rc, token_cache : false}));
   const cli = path.resolve(__dirname, '..', 'index.js');
   for(let i = 0; i < 2; i++) {
-    const output = await exec(process.execPath, [cli, 'login', '--source'], {
+    const output = await exec(process.execPath, [cli, 'login'], {
       cwd : home,
       env : {...process.env, HOME : home, VAUTHRC : rc, VAULT_TOKEN : '', SSH_AUTH_SOCK : process.env.SSH_AUTH_SOCK},
     });
-    assert.ok(output.stdout.includes("export VAULT_TOKEN='fresh-token'"));
+    assert.equal(output.stdout, 'fresh-token');
     assert.ok(output.stderr.includes('Vauth token: generated'));
   }
   assert.equal(fs.existsSync(file), false);
@@ -666,11 +666,9 @@ for(const command of [[], ['login'], ['connect']]) {
     assert.match(reused.stderr, /^Vauth token: reused · /);
     assert.equal(fs.readFileSync(file, 'utf8'), armor);
     assert.deepEqual(requests.map(r => r.path), ['/v1/auth/jwt/login']);
-    const source = await exec(process.execPath, [cli, ...command, '--source'], {cwd : home, env});
-    assert.equal(source.stdout, "export VAULT_TOKEN='fresh-token'\n");
-    const json = await exec(process.execPath, [cli, ...command, '--ir://json'], {cwd : home, env});
-    assert.equal(JSON.parse(json.stdout), 'fresh-token');
-    assert.ok(!source.stderr.includes('fresh-token'));
+    const raw = await exec(process.execPath, [cli, '--ir://run=login', '--ir://raw'], {cwd : home, env});
+    assert.equal(raw.stdout, 'fresh-token');
+    assert.ok(!raw.stderr.includes('fresh-token'));
   });
 }
 
@@ -742,7 +740,8 @@ test('cnyks runs version, generates help and reports unknown commands', async t 
     assert.match(help.stderr, /version/);
   }
   await assert.rejects(exec(process.execPath, [cli, 'unknown-command'], options));
-  await assert.rejects(exec(process.execPath, [cli], options));
+  const unbound = await exec(process.execPath, [cli], options);
+  assert.equal(unbound.stdout, '');
 });
 
 test('CLI errors do not print server response bodies or inherited tokens', async t => {
@@ -807,4 +806,13 @@ test('cnyks static version works with a malformed configuration file', async t =
     assert.equal(result.stdout, require('../package.json').version);
     assert.equal(result.stderr, '');
   }
+});
+
+
+test('Node login returns the token from connect for cnyks raw rendering', async () => {
+  const instance = Object.create(Vauth.prototype);
+  let forced;
+  instance.connect = async renew => { forced = renew; return 'returned-token'; };
+  assert.equal(await instance.login(true), 'returned-token');
+  assert.equal(forced, true);
 });

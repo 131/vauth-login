@@ -40,8 +40,7 @@ type Vauth struct {
 	HomeDir    string
 	// Environ is the process environment snapshot used for macros.
 	Environ map[string]string
-	// Stdout/Stderr/Stdin default to the process streams.
-	Stdout     io.Writer
+	// Stderr defaults to the process error stream.
 	Stderr     io.Writer
 	HTTPClient *http.Client
 	// Now overrides the clock (tests).
@@ -143,13 +142,6 @@ func New() (*Vauth, error) {
 		fmt.Fprintln(v.stderr(), "Not bound to any vault")
 	}
 	return v, nil
-}
-
-func (v *Vauth) stdout() io.Writer {
-	if v.Stdout != nil {
-		return v.Stdout
-	}
-	return os.Stdout
 }
 
 func (v *Vauth) stderr() io.Writer {
@@ -291,26 +283,4 @@ func reauthenticable(err error) error {
 
 func fromAuth(granted *auth) *token {
 	return &token{Value: granted.ClientToken, TTL: float64(granted.LeaseDuration), LeaseDuration: granted.LeaseDuration, Renewable: granted.Renewable}
-}
-
-// Login prints a token or an export suitable for a bash sourcing shell.
-func (v *Vauth) Login(source, renew bool) error {
-	token, err := v.Connect(renew)
-	if err != nil {
-		return err
-	}
-	if token == "" {
-		return errors.New("Could not login to vault: no authentication method available")
-	}
-	if source {
-		_, err = fmt.Fprintf(v.stdout(), "export VAULT_TOKEN=%s\n", ShellEscape(token))
-	} else {
-		_, err = fmt.Fprint(v.stdout(), token)
-	}
-	return err
-}
-
-// ShellEscape single-quotes a value for bash.
-func ShellEscape(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
 }

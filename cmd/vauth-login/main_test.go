@@ -72,21 +72,13 @@ func TestCLI(t *testing.T) {
 			t.Fatalf("%v: stdout=%q stderr=%q err=%v", args, stdout, stderr, err)
 		}
 	}
-	stdout, _, err := call("--source")
-	if err != nil || stdout != "export VAULT_TOKEN='fixture-token'\n" {
-		t.Fatalf("source=%q err=%v", stdout, err)
-	}
-	stdout, _, err = call("--ir://json")
-	if err != nil || stdout != "\"fixture-token\"\n" {
-		t.Fatalf("JSON=%q err=%v", stdout, err)
-	}
 	for _, args := range [][]string{{"version"}, {"--version"}} {
 		stdout, stderr, err := call(args...)
 		if err != nil || stdout != "v1.0.0\n" || stderr != "" {
 			t.Fatalf("version: %q %q %v", stdout, stderr, err)
 		}
 	}
-	for _, args := range [][]string{{"env"}, {"run", "echo"}, {"--bogus"}, {"login", "unexpected"}} {
+	for _, args := range [][]string{{"env"}, {"run", "echo"}, {"--bogus"}, {"login", "unexpected"}, {"--source"}, {"--ir://json"}} {
 		if _, _, err := call(args...); err == nil {
 			t.Fatalf("invalid command accepted: %v", args)
 		}

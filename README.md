@@ -28,27 +28,21 @@ npm install -g 'git+ssh://git@github.com/131/vauth-login.git#v1.0.0'
 ```bash
 vauth-login                 # stdout: token; stderr: status and remaining validity
 vauth-login --renew         # force a fresh login
-vauth-login --source        # stdout: export VAULT_TOKEN='…'
 vauth-login version         # release/build version, without authenticating
 ```
 
 `login` and `connect` are optional aliases for the default operation.
-`--ir://json` JSON-encodes the token; otherwise it is written without a trailing
-newline. `--source` produces a bash export with a trailing newline. Status goes
-only to stderr, for example `Vauth token: reused · 11h`. No token or Vault address
-is included in that status.
+The token is written raw to stdout, without a trailing newline. Status goes to
+stderr, for example `Vauth token: reused · 11h`.
 
-The Node CLI uses cnyks to discover methods and parameters. `vauth-login --help`
-prints its generated command list on stderr. Runner options such as
-`--ir://run=version` select a method directly.
+The Node library returns the token. Its CLI uses cnyks with `--ir://raw` to write
+that result. `vauth-login --help` prints the generated command list on stderr;
+`--ir://run=version` selects the version method directly.
 
-In bash, verify the producer succeeds before sourcing its output:
+Capture the token in a shell variable:
 
 ```bash
-if token_export=$(vauth-login --source); then
-  eval "$token_export"
-  unset token_export
-fi
+VAULT_TOKEN=$(vauth-login)
 ```
 
 ## Configuration
@@ -108,8 +102,7 @@ other applications.
 The selected configuration file determines the Vault origin and authentication
 role. Review it before permitting SSH-agent signing.
 Whoever controls the agent socket can decrypt its caches. Tokens are bearer
-credentials: don't log stdout, enable shell tracing around exports, or store tokens
-in plaintext files.
+credentials: keep tokens out of logs, shell traces and plaintext files.
 
 The Node transport uses nyks's 60-second response deadline, from completion of
 the send through headers and body reading. The Go HTTP client has a 60-second

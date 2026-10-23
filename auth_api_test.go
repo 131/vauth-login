@@ -76,25 +76,18 @@ func TestTransportRejectsRedirect(t *testing.T) {
 	equal(t, defaultHTTPClient.Timeout, 60*time.Second)
 }
 
-func TestLoginOutput(t *testing.T) {
-	for _, source := range []bool{false, true} {
-		f := newFixture(t, fixtureOptions{})
-		v := f.client()
-		var stdout bytes.Buffer
-		v.Stdout = &stdout
-		if err := v.Login(source, true); err != nil {
-			t.Fatal(err)
-		}
-		expected := "fresh-token"
-		if source {
-			expected = "export VAULT_TOKEN='fresh-token'\n"
-		}
-		equal(t, stdout.String(), expected)
+func TestConnectReturnsToken(t *testing.T) {
+	f := newFixture(t, fixtureOptions{})
+	v := f.client()
+	var status bytes.Buffer
+	v.Stderr = &status
+	token, err := v.Connect(true)
+	if err != nil {
+		t.Fatal(err)
 	}
-	v := &Vauth{}
-	if err := v.Login(false, false); err == nil {
-		t.Fatal("empty token accepted")
-	}
+	equal(t, token, "fresh-token")
+	equal(t, v.VaultToken, token)
+	equal(t, status.String(), "Vauth token: generated · 1d\n")
 }
 
 func TestProjectVersionChecksOnlyLogin(t *testing.T) {
