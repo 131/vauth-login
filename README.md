@@ -9,7 +9,7 @@ and CLI, a Go module and CLI, and binaries for Windows and Linux.
 ## Quick login
 
 ```bash
-vauth-login
+export VAULT_TOKEN=$(vauth-login)
 ```
 
 ## Install
@@ -41,17 +41,11 @@ the binary on your PATH. The release workflow requires the signing server.
 Get a token using your configured authentication and available cache:
 
 ```bash
-vauth-login
+export VAULT_TOKEN=$(vauth-login)
 ```
 
 The token is written raw to stdout, without a trailing newline. Status goes to
 stderr, for example `Vauth token: reused · 11h`.
-
-Capture it in a shell variable:
-
-```bash
-VAULT_TOKEN=$(vauth-login)
-```
 
 Force a fresh login:
 
