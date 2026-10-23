@@ -111,9 +111,10 @@ Whoever controls the agent socket can decrypt its caches. Tokens are bearer
 credentials: don't log stdout, enable shell tracing around exports, or store tokens
 in plaintext files.
 
-The default HTTP transports do not follow redirects and have a 60-second deadline
-including the response body. HTTP errors expose status/body to programmatic
-callers, but their printable messages omit bodies to avoid echoing credentials.
+The Node transport uses nyks's 60-second response deadline, from completion of
+the send through headers and body reading. The Go HTTP client has a 60-second
+request timeout. Redirect responses are handled as HTTP statuses. HTTP errors
+expose status/body to programmatic callers; printable messages contain the status.
 Go callers overriding `HTTPClient` own its redirect/timeout policy. Cache reuse
 intentionally does not check revocation online; use `LookupSelf`/`lookupSelf` when
 that validation is needed. Vault enforces server-side authorization.

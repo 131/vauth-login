@@ -720,7 +720,7 @@ test('transport deadline includes a stalled response body', async t => {
   const v = Object.create(Vauth.prototype);
   v.VAULT_ADDR = `http://127.0.0.1:${server.address().port}`;
   v.requestTimeout = 30;
-  await assert.rejects(v.request('GET', 'stall'), /Vault request timed out/);
+  await assert.rejects(v.request('GET', 'stall'), err => err.code === 'ETIMEDOUT');
 });
 
 test('cnyks runs version, generates help and reports unknown commands', async t => {
@@ -772,7 +772,7 @@ test('transport deadline cancels a request waiting for response headers', async 
   const v = Object.create(Vauth.prototype);
   v.VAULT_ADDR = `http://127.0.0.1:${server.address().port}`;
   v.requestTimeout = 30;
-  await assert.rejects(v.request('GET', 'stall'), /Vault request timed out/);
+  await assert.rejects(v.request('GET', 'stall'), err => err.code === 'ETIMEDOUT');
 });
 
 test('transport forwards method, token and JSON payload and returns explicit statuses', async t => {

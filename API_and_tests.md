@@ -16,14 +16,15 @@ const {status, body} = await client.request(
 `login(source = false, renew = false)` returns the token or a bash export string.
 `version()` returns the package version.
 `vaultURL(path)` constructs an API URL under the configured Vault `/v1/`.
-`request(method, path, token = '', payload = null, expect = 200)` sends JSON when
-payload is non-null and returns `{status, body}` (a Buffer). Set `expect = 0` to
+`request(method, path, token = '', payload = null, expect = 200)` sends object
+payloads as JSON and returns `{status, body}` (a Buffer). Set `expect = 0` to
 handle the status yourself. Each call makes a request to the configured Vault
 origin. Status filtering returns `HTTPError` for a status different from
 `expect`; with `expect = 0`, the status and body are returned directly.
-`requestTimeout` can override the 60-second deadline in milliseconds. The method
-uses `nyks/http/request` for the HTTP call, `nyks/stream/drain` for the response,
-and `nyks/async/timeout` with an abort signal for the complete request deadline.
+`requestTimeout` sets nyks's response deadline in milliseconds (default: 60000),
+from completion of the send through headers and body reading. The method uses
+`nyks/http/request` for the HTTP call and `nyks/stream/drain` for the response.
+Timeouts propagate with `code = 'ETIMEDOUT'`.
 
 `VauthLogin.HTTPError` has `status`, `body`, and compatibility
 `res.statusCode` fields. `body` is available to SDK callers as a non-enumerable

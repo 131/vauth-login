@@ -17,7 +17,6 @@ const humanDiff  = require('nyks/date/humanDiff');
 
 const request    = require('nyks/http/request');
 const drain      = require('nyks/stream/drain');
-const timeout    = require('nyks/async/timeout');
 const replaceEnv = require('nyks/string/replaceEnv');
 const promiser   = require('nyks/function/promiser');
 
@@ -288,24 +287,16 @@ class VauthLogin {
   }
 
   async request(method, apiPath, token = '', payload = null, expect = 200) {
-    const controller = new AbortController();
-    const duration = this.requestTimeout || 60000;
-    const deadline = timeout(duration, new Error('Vault request timed out'));
     const headers = {};
     if(token) headers['X-Vault-Token'] = token;
     if(payload !== null) headers['Content-Type'] = 'application/json';
     const query = {...url.parse(this.vaultURL(apiPath)), method, headers, json : true,
-      reqtimeout : duration, signal : controller.signal};
-    try {
-      const res = await Promise.race([request(query, payload), deadline]);
-      const body = await Promise.race([drain(res), deadline]);
-      if(expect && res.statusCode !== expect)
-        throw new HTTPError(res.statusCode, body.toString());
-      return {status : res.statusCode, body};
-    } finally {
-      deadline.clearTimeout();
-      controller.abort();
-    }
+      reqtimeout : this.requestTimeout || 60000};
+    const res = await request(query, payload);
+    const body = await drain(res);
+    if(expect && res.statusCode !== expect)
+      throw new HTTPError(res.statusCode, body.toString());
+    return {status : res.statusCode, body};
   }
 
 }
