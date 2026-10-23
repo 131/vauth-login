@@ -120,14 +120,6 @@ role. Review it before permitting SSH-agent signing. Whoever controls the agent
 socket can decrypt its caches. Tokens are bearer credentials: keep them out of
 logs, shell traces and plaintext files.
 
-The Node transport uses nyks's 60-second response deadline, from completion of
-the send through headers and body reading. The Go HTTP client has a 60-second
-request timeout. Redirect responses are handled as HTTP statuses. HTTP errors
-expose status/body to programmatic callers; printable messages contain the status.
-Go callers overriding `HTTPClient` own its redirect/timeout policy. Cache reuse
-uses local validity information; use `LookupSelf`/`lookupSelf` for online token
-validation. Vault enforces server-side authorization.
-
 ## API & SDK
 
 Node module, Go module, token lifecycle, Vault HTTP transport and the test matrix:
