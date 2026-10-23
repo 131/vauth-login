@@ -207,10 +207,28 @@ func (v *Vauth) promptVault(addr, file string) (bool, error) {
 	if info, err := os.Stdin.Stat(); err != nil || info.Mode()&os.ModeCharDevice == 0 {
 		return false, fmt.Errorf("%s. %s", where, knownVaultsHint)
 	}
-	fmt.Fprintf(v.stderr(), "%s.\n%s\nContinue? [y/N] ", where, knownVaultsHint)
-	answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-	answer = strings.ToLower(strings.TrimSpace(answer))
-	return answer == "y" || answer == "yes", nil
+	return v.askVault(os.Stdin, where), nil
+}
+
+// askVault follows cnyks/prompt/bool: an empty answer takes the default (no),
+// anything but yes/no is asked again, end of input refuses.
+func (v *Vauth) askVault(input io.Reader, where string) bool {
+	reader := bufio.NewReader(input)
+	for {
+		fmt.Fprintf(v.stderr(), "%s.\n%s\nContinue? [y/N]", where, knownVaultsHint)
+		answer, err := reader.ReadString('\n')
+		if err != nil && answer == "" {
+			fmt.Fprintln(v.stderr())
+			return false
+		}
+		switch strings.ToLower(strings.TrimSpace(answer)) {
+		case "y", "yes":
+			return true
+		case "", "n", "no":
+			return false
+		}
+		fmt.Fprintln(v.stderr(), "Please type [yes] or [no]")
+	}
 }
 
 func (v *Vauth) tokenStatus(operation string, token *token) {

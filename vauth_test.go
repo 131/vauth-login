@@ -731,6 +731,25 @@ func TestUnknownVaultConfirmation(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	equalPaths(t, f.paths(), "/v1/auth/jwt/login", "/v1/auth/jwt/login", "/v1/auth/jwt/login")
+
+	// The terminal dialogue follows cnyks/prompt/bool.
+	for _, c := range []struct {
+		input    string
+		ok       bool
+		prompts  int
+		reminded bool
+	}{
+		{"y\n", true, 1, false}, {"YES\n", true, 1, false}, {"n\n", false, 1, false},
+		{"\n", false, 1, false}, {"maybe\nyes\n", true, 2, true}, {"", false, 1, false},
+	} {
+		var stderr strings.Builder
+		v = load()
+		v.Stderr = &stderr
+		ok := v.askVault(strings.NewReader(c.input), "Unknown vault x, selected by y")
+		equal(t, ok, c.ok)
+		equal(t, strings.Count(stderr.String(), "Continue? [y/N]"), c.prompts)
+		equal(t, strings.Contains(stderr.String(), "Please type [yes] or [no]"), c.reminded)
+	}
 }
 
 func TestReplaceEnv(t *testing.T) {

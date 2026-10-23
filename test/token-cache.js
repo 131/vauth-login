@@ -616,12 +616,23 @@ async function projectVault(t, options = {}) {
       cwd : project, env : {...process.env, HOME : home, VAUTHRC : '', VAULT_TOKEN : '', VAULT_ADDR : ''},
     });
     let stdout = '', stderr = '';
+    // Answers are typed one per question, the next one waiting for the next
+    // prompt; the pipe is closed after the last one, as a terminal would not be.
+    const answers = input === undefined ? [] : [].concat(input);
+    const type = () => {
+      if(answers.length)
+        child.stdin.write(answers.shift());
+      if(!answers.length)
+        child.stdin.end();
+    };
     child.stdout.on('data', chunk => stdout += chunk);
-    child.stderr.on('data', chunk => stderr += chunk);
+    child.stderr.on('data', chunk => {
+      stderr += chunk;
+      if(String(chunk).includes('[y/N]'))
+        type();
+    });
     child.on('close', code => resolve({code, stdout, stderr}));
-    if(input !== undefined)
-      child.stdin.end(input);
-    else
+    if(!script)
       child.stdin.end();
   });
   // Simulate a terminal on a piped stdin so the prompt reads the answer.
@@ -672,10 +683,15 @@ test('an unknown project vault asks once on a terminal; refusal makes no request
   assert.ok(refused.stderr.includes('Continue? [y/N]'));
   assert.ok(refused.stderr.includes(`Unknown vault ${addr}: refused`));
   assert.deepEqual(requests, []);
-  const accepted = await run(tty, 'y\n');
+  const accepted = await run(tty, ['maybe\n', 'yes\n']);
   assert.equal(accepted.code, 0, accepted.stderr);
   assert.equal(accepted.stdout, 'fresh-token');
-  assert.equal(accepted.stderr.match(/Continue\? \[y\/N\]/g).length, 1);
+  assert.ok(accepted.stderr.includes('Please type [yes] or [no]'));
+  assert.equal(accepted.stderr.match(/Continue\? \[y\/N\]/g).length, 2);
+  assert.deepEqual(requests.map(req => req.path), ['/v1/auth/jwt/login']);
+  const defaulted = await run(tty, '\n');
+  assert.notEqual(defaulted.code, 0);
+  assert.ok(defaulted.stderr.includes(`Unknown vault ${addr}: refused`));
   assert.deepEqual(requests.map(req => req.path), ['/v1/auth/jwt/login']);
 });
 

@@ -5,9 +5,9 @@ const os   = require('os');
 const fs    = require('fs');
 const path  = require('path');
 const url   = require('url');
-const readline = require('readline');
 const {createHash, randomUUID} = require('crypto');
 const {encrypt, decrypt} = require('ssh-agent-crypt');
+const promptBool = require('cnyks/prompt/bool');
 
 const {parse} = require('yaml');
 const semver     = require('semver');
@@ -111,15 +111,8 @@ class VauthLogin {
     const hint = 'Add it to known_vaults in ~/.vauthrc to stop being asked.';
     if(!process.stdin.isTTY)
       throw new Error(`${where}. ${hint}`);
-    const rl = readline.createInterface({input : process.stdin, terminal : false});
-    try {
-      process.stderr.write(`${where}.\n${hint}\nContinue? [y/N] `);
-      const answer = await new Promise(resolve => rl.question('', resolve));
-      if(!['y', 'yes'].includes(answer.trim().toLowerCase()))
-        throw new Error(`Unknown vault ${normalizeAddr(this.VAULT_ADDR)}: refused`);
-    } finally {
-      rl.close();
-    }
+    if(!await promptBool(`${where}.\n${hint}\nContinue? `, false))
+      throw new Error(`Unknown vault ${normalizeAddr(this.VAULT_ADDR)}: refused`);
     this._unknown_vault = false;
   }
 

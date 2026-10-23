@@ -35,8 +35,10 @@ The client exposes `rc`, `rc_file`, `VAULT_ADDR`, and `VAULT_TOKEN`.
 `connect(renew, accept)` returns an inherited `VAULT_TOKEN` as is, then the
 token for configured authentication, or undefined when authentication is
 unavailable. When `./.vauthrc` selects a Vault that `~/.vauthrc` does not list
-(`vault_addr` or `known_vaults`), `_trust_vault()` prompts once on stderr before
-the first request and rejects without a TTY; `accept` skips that check.
+(`vault_addr` or `known_vaults`), `_trust_vault()` asks once before the first
+request through `cnyks/prompt/bool` (question on stderr, `yes`/`no`, empty
+answer refuses, anything else is asked again) and rejects without a TTY;
+`accept` skips that check. The Go prompt follows the same dialogue.
 
 ## Go
 
