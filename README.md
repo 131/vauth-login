@@ -38,6 +38,10 @@ newline. `--source` produces a bash export with a trailing newline. Status goes
 only to stderr, for example `Vauth token: reused · 11h`. No token or Vault address
 is included in that status.
 
+The Node CLI uses cnyks to discover methods and parameters. `vauth-login --help`
+prints its generated command list on stderr. Runner options such as
+`--ir://run=version` select a method directly.
+
 In bash, verify the producer succeeds before sourcing its output:
 
 ```bash
@@ -66,8 +70,8 @@ Configuration keys: `vault_addr`, `ssh_auth`, `jwt_auth`, and `token_cache`.
 
 SSH authentication uses `SSH_AUTH_SOCK`. Without it, the native Windows binary
 autodiscovers the Pageant (0.75+) named pipe, then the OpenSSH agent pipe.
-Disk caching requires an SSH agent; JWT authentication can still work. The Node implementation uses
-ssh2's Pageant transport when no Windows socket is configured.
+Disk caching requires an SSH agent; JWT authentication can still work. The Node
+implementation uses ssh2's Pageant transport when no Windows socket is configured.
 
 ## Token lifecycle and cache
 

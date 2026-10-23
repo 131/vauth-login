@@ -19,11 +19,15 @@ const {status, body} = await client.request(
 `request(method, path, token = '', payload = null, expect = 200)` sends JSON when
 payload is non-null and returns `{status, body}` (a Buffer). Set `expect = 0` to
 handle the status yourself. Each call makes a request to the configured Vault
-origin; redirects are returned to the caller as HTTP responses.
-`requestTimeout` can override the 60-second deadline in milliseconds.
+origin. Status filtering returns `HTTPError` for a status different from
+`expect`; with `expect = 0`, the status and body are returned directly.
+`requestTimeout` can override the 60-second deadline in milliseconds. The method
+uses `nyks/http/request` for the HTTP call, `nyks/stream/drain` for the response,
+and `nyks/async/timeout` with an abort signal for the complete request deadline.
 
 `VauthLogin.HTTPError` has `status`, `body`, and compatibility
-`res.statusCode` fields. Its message contains only the status, not the body.
+`res.statusCode` fields. `body` is available to SDK callers as a non-enumerable
+property; error logging displays the status.
 
 The client exposes `rc`, `VAULT_ADDR`, and `VAULT_TOKEN`. `connect()` returns
 undefined when authentication is unavailable; CLI/login output rejects an empty
@@ -65,10 +69,15 @@ One client announces status once per connection unless forced to log in again.
 - `--source`: emit a single shell-escaped `export VAULT_TOKEN=…` line.
 - `--ir://json`: emit a JSON string; `--source` takes precedence.
 - `version`, `--version`: emit the version without loading credentials.
-- `--help`, `help`: usage; no authentication.
+- `--help`, `help`: command help. Go prints usage on stdout; Node prints the
+  cnyks-generated command list on stderr.
 - Errors: nonzero exit, diagnostics on stderr.
 
 Go release versions use the `v` tag prefix; Node uses the package semver.
+
+The Node CLI delegates method lookup, parameters, aliases and result rendering
+to cnyks. `connect` is a cnyks alias for `login`; `--ir://run=version` and
+`runner:list_commands` use its native runner interface.
 
 ## Verification
 
@@ -94,9 +103,8 @@ storage, cache disabled/missing/corrupt/expired/unwritable, unlimited lifetime,
 lease thresholds and renewal baseline, forced login, inherited credentials,
 400/403 reauthentication, server failures, key selection, status/output secrecy,
 configuration precedence and authentication configuration, public lookup/HTTP
-APIs, redirect
-rejection and Node body deadlines. CLI subprocess tests check default and aliases,
-source/JSON output, renewal, caching and argument errors.
+APIs, redirect rejection and Node request deadlines. CLI subprocess tests check default and aliases,
+source/JSON output, renewal, caching, reflected commands and runner help.
 
 Live installation validation must clear the inherited token, force a new login,
 validate it with Vault `lookup-self`, then invoke the installed binary again with

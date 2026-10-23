@@ -4,8 +4,7 @@
 const os   = require('os');
 const fs    = require('fs');
 const path  = require('path');
-const http = require('http');
-const https = require('https');
+const url   = require('url');
 const {createHash, randomUUID} = require('crypto');
 const {encrypt, decrypt} = require('ssh-agent-crypt');
 
@@ -16,9 +15,11 @@ const eachLimit = require('nyks/async/eachLimit');
 const walk       = require('nyks/object/walk');
 const humanDiff  = require('nyks/date/humanDiff');
 
+const request    = require('nyks/http/request');
+const drain      = require('nyks/stream/drain');
+const timeout    = require('nyks/async/timeout');
 const replaceEnv = require('nyks/string/replaceEnv');
 const promiser   = require('nyks/function/promiser');
-const {args, dict} = require('nyks/process/parseArgs')();
 
 
 const {createAgent} = require('ssh2/lib/agent');
@@ -38,7 +39,8 @@ class HTTPError extends Error {
   constructor(status, body) {
     super(`Unexpected Vault status ${status}`);
     this.status = status;
-    this.body = body;
+    // The response remains available to callers, while error logging shows status.
+    Object.defineProperty(this, 'body', {value : body});
     this.res = {statusCode : status};
   }
 }
@@ -76,13 +78,15 @@ class VauthLogin {
     this.VAULT_ADDR = this.rc.vault_addr || process.env.VAULT_ADDR; //might be null
     this.VAULT_TOKEN = process.env.VAULT_TOKEN;
 
-    if(!this.VAULT_ADDR)
-      console.error("Not bound to any vault");
 
   }
 
-  version() {
+  static version() {
     return VERSION;
+  }
+
+  version() {
+    return VauthLogin.version();
   }
 
   _token_cache_key() {
@@ -136,7 +140,9 @@ class VauthLogin {
     console.error('Vauth token: %s · %s', operation, validity);
   }
 
-  async connect(renew = false) {
+  async connect(renew = false) /**
+  * @interactive_runner hide
+  */ {
     const {ssh_auth, jwt_auth} = this.rc;
     if(!ssh_auth && !jwt_auth) {
       this.VAULT_TOKEN = undefined;
@@ -212,7 +218,10 @@ class VauthLogin {
     return auth;
   }
 
-  async login(source = false, renew = false) {
+  async login(source = false, renew = false) /**
+  * Authenticate and return a token or shell export
+  * @alias connect
+  */ {
     const token = await this.connect(renew);
     if(!token)
       throw new Error('Could not login to vault: no authentication method available');
@@ -278,35 +287,25 @@ class VauthLogin {
     return `${trim(this.VAULT_ADDR || '', '/')}/v1/${String(apiPath).replace(/^\/+/, '')}`;
   }
 
-  // No redirects: a Vault token must never be forwarded to another origin.
-  // The deadline includes the body, not just connection/response headers.
   async request(method, apiPath, token = '', payload = null, expect = 200) {
-    const target = new URL(this.vaultURL(apiPath));
-    if(!['http:', 'https:'].includes(target.protocol))
-      throw new Error('Vault address must use HTTP or HTTPS');
-    const transport = target.protocol === 'https:' ? https : http;
+    const controller = new AbortController();
+    const duration = this.requestTimeout || 60000;
+    const deadline = timeout(duration, new Error('Vault request timed out'));
     const headers = {};
-    const data = payload === null ? null : JSON.stringify(payload);
     if(token) headers['X-Vault-Token'] = token;
-    if(data !== null) headers['Content-Type'] = 'application/json';
-    return new Promise((resolve, reject) => {
-      const req = transport.request(target, {method, headers}, res => {
-        const chunks = [];
-        res.on('data', chunk => chunks.push(chunk));
-        res.on('error', reject);
-        res.on('end', () => {
-          const body = Buffer.concat(chunks);
-          if(expect && res.statusCode !== expect)
-            reject(new HTTPError(res.statusCode, body.toString()));
-          else
-            resolve({status : res.statusCode, body});
-        });
-      });
-      const timer = setTimeout(() => req.destroy(new Error('Vault request timed out')), this.requestTimeout || 60000);
-      req.on('error', reject);
-      req.on('close', () => clearTimeout(timer));
-      req.end(data);
-    });
+    if(payload !== null) headers['Content-Type'] = 'application/json';
+    const query = {...url.parse(this.vaultURL(apiPath)), method, headers, json : true,
+      reqtimeout : duration, signal : controller.signal};
+    try {
+      const res = await Promise.race([request(query, payload), deadline]);
+      const body = await Promise.race([drain(res), deadline]);
+      if(expect && res.statusCode !== expect)
+        throw new HTTPError(res.statusCode, body.toString());
+      return {status : res.statusCode, body};
+    } finally {
+      deadline.clearTimeout();
+      controller.abort();
+    }
   }
 
 }
@@ -318,36 +317,14 @@ const shellEscape = (arg) =>  {
 
 //ensure module is called directly, i.e. not required
 if(module.parent === null) {
+  const {args, dict} = require('nyks/process/parseArgs')();
   let cmd = args.shift() || 'login';
-  if(process.argv.includes('--version')) cmd = 'version';
-  if(cmd === 'version') {
-    console.log(VERSION);
-    process.exit(0);
-  }
-  if(process.argv.includes('--help') || cmd === 'help') {
-    console.log('Usage: vauth-login [--renew] [--source]\n       vauth-login version');
-    process.exit(0);
-  }
-  if(!['login', 'connect', 'version'].includes(cmd)) {
-    console.error(`Invalid command key '${cmd}'`);
-    process.exit(1);
-  }
-  if(args.length || Object.keys(dict).some(key => !['source', 'renew', 'ir://json', 'ir://raw'].includes(key))) {
-    console.error('Unexpected argument or flag');
-    process.exit(1);
-  }
-  const output = process.argv.includes('--ir://json') ? '--ir://json' : '--ir://raw';
-  class CLI extends VauthLogin {
-    async login(source = false, renew = false) {
-      try {
-        return await super.login(source, renew);
-      } catch(err) {
-        // cnyks logs error objects; don't let it inspect HTTPError.body.
-        throw new Error(err instanceof Error ? err.message : 'Could not login to vault');
-      }
-    }
-  }
-  require('cnyks/lib/bundle')(CLI, 'vauth-login', [`--ir://run=login`, output]);
+  if(dict.version) cmd = 'version';
+  if(dict.help || cmd === 'help') cmd = '?';
+  const flags = [dict['ir://json'] ? '--ir://json' : '--ir://raw'];
+  if(!dict['ir://run'] && !dict['ir://start']) flags.push(`--ir://run=${cmd}`);
+  if(cmd === 'version' || dict['ir://run'] === 'version') flags.push('--ir://static');
+  require('cnyks/lib/bundle')(VauthLogin, 'vauth-login', flags);
 }
 
 module.exports = VauthLogin;

@@ -723,20 +723,25 @@ test('transport deadline includes a stalled response body', async t => {
   await assert.rejects(v.request('GET', 'stall'), /Vault request timed out/);
 });
 
-test('version and help work without configuration; invalid commands fail closed', async t => {
+test('cnyks runs version, generates help and reports unknown commands', async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vauth-login-version-'));
   t.after(() => fs.rmSync(directory, {recursive : true, force : true}));
   const cli = path.resolve(__dirname, '..', 'index.js');
   const options = {cwd : directory, env : {...process.env, HOME : directory, VAUTHRC : '', VAULT_ADDR : '', VAULT_TOKEN : ''}};
-  for(const command of [['version'], ['--version']]) {
+  for(const command of [['version'], ['--version'], ['--ir://run=version']]) {
     const out = await exec(process.execPath, [cli, ...command], options);
     assert.equal(out.stdout.trim(), require('../package.json').version);
     assert.equal(out.stderr, '');
   }
-  const help = await exec(process.execPath, [cli, '--help'], options);
-  assert.match(help.stdout, /Usage: vauth-login/);
-  for(const command of [['env'], ['--bogus'], ['login', 'unexpected']])
-    await assert.rejects(exec(process.execPath, [cli, ...command], options));
+  for(const command of [['--help'], ['help'], ['?'], ['runner:list_commands']]) {
+    const help = await exec(process.execPath, [cli, ...command], options);
+    assert.equal(help.stdout, '');
+    assert.match(help.stderr, /commands list/);
+    assert.match(help.stderr, /login/);
+    assert.match(help.stderr, /connect/);
+    assert.match(help.stderr, /version/);
+  }
+  await assert.rejects(exec(process.execPath, [cli, 'unknown-command'], options));
   await assert.rejects(exec(process.execPath, [cli], options));
 });
 
@@ -758,4 +763,48 @@ test('CLI errors do not print server response bodies or inherited tokens', async
     assert.ok(!err.stderr.includes('secret-jwt'));
     return true;
   });
+});
+
+test('transport deadline cancels a request waiting for response headers', async t => {
+  const server = http.createServer(() => {});
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const v = Object.create(Vauth.prototype);
+  v.VAULT_ADDR = `http://127.0.0.1:${server.address().port}`;
+  v.requestTimeout = 30;
+  await assert.rejects(v.request('GET', 'stall'), /Vault request timed out/);
+});
+
+test('transport forwards method, token and JSON payload and returns explicit statuses', async t => {
+  const {client, requests} = await fixture(t);
+  const v = client();
+  const payload = {message : 'écho'};
+  const response = await v.request('PUT', 'write', 'fixture-token', payload, 0);
+  assert.equal(response.status, 404);
+  assert.ok(Buffer.isBuffer(response.body));
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].method, 'PUT');
+  assert.equal(requests[0].token, 'fixture-token');
+  assert.deepEqual(JSON.parse(requests[0].body), payload);
+});
+
+test('HTTPError keeps the response available to SDK callers while logs show status', () => {
+  const error = new Vauth.HTTPError(503, 'secret-server-response');
+  assert.equal(error.body, 'secret-server-response');
+  assert.equal(error.status, 503);
+  assert.ok(!require('util').inspect(error).includes('secret-server-response'));
+  assert.ok(!JSON.stringify(error).includes('secret-server-response'));
+});
+
+test('cnyks static version works with a malformed configuration file', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vauth-login-static-'));
+  t.after(() => fs.rmSync(directory, {recursive : true, force : true}));
+  fs.writeFileSync(path.join(directory, '.vauthrc'), 'vault_addr: [');
+  const cli = path.resolve(__dirname, '..', 'index.js');
+  const options = {cwd : directory, env : {...process.env, HOME : directory, VAUTHRC : ''}};
+  for(const command of [['version'], ['--version'], ['--ir://run=version']]) {
+    const result = await exec(process.execPath, [cli, ...command], options);
+    assert.equal(result.stdout, require('../package.json').version);
+    assert.equal(result.stderr, '');
+  }
 });
