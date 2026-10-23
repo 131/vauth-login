@@ -1,49 +1,75 @@
 # vauth-login
 
-Standalone Vault authentication using an SSH agent or JWT, with encrypted token
-caching. Native Go binaries for Windows and Linux, plus a Node module and CLI.
+## A Vault token, ready to use
+
+Authenticate to Vault with your SSH agent or JWT and get the token on stdout.
+The encrypted cache keeps it ready for the next call. Available as a Node module
+and CLI, a Go module and CLI, and binaries for Windows and Linux.
+
+## Quick login
+
+```bash
+vauth-login
+```
 
 ## Install
 
-Download `vauth-login-windows-amd64.exe` or `vauth-login-linux-amd64` from the
-GitHub release, check `SHA256SUMS`, and put it on your PATH as `vauth-login.exe`
-or `vauth-login`. Windows release binaries are Authenticode signed; an unavailable
-signing server fails the release rather than publishing an unsigned executable.
-
-Or install the Go CLI:
+Pick whichever fits the machine in front of you:
 
 ```bash
+# node
+npm install -g vauth-login
+
+# go
 go install github.com/131/vauth-login/cmd/vauth-login@latest
+
+# binary, linux
+wget -O vauth-login https://github.com/131/vauth-login/releases/latest/download/vauth-login-linux-amd64
+chmod +x vauth-login
+
+# binary, windows (cmd or PowerShell)
+curl.exe -fsSL -o vauth-login.exe https://github.com/131/vauth-login/releases/latest/download/vauth-login-windows-amd64.exe
 ```
 
-The Node CLI exposes the same commands. The first npm-registry publication is
-pending; install the tagged source in the meantime:
+The [npm](https://www.npmjs.com/package/vauth-login) package carries the Node CLI
+and module. Windows binaries are Authenticode signed, with `SHA256SUMS` on every
+[release](https://github.com/131/vauth-login/releases). Check the checksum and put
+the binary on your PATH. The release workflow requires the signing server.
+
+## Usage
+
+Get a token using your configured authentication and available cache:
 
 ```bash
-npm install -g 'git+ssh://git@github.com/131/vauth-login.git#v1.0.0'
+vauth-login
 ```
 
-## Use
-
-```bash
-vauth-login                 # stdout: token; stderr: status and remaining validity
-vauth-login --renew         # force a fresh login
-vauth-login version         # release/build version, without authenticating
-```
-
-`login` and `connect` are optional aliases for the default operation.
 The token is written raw to stdout, without a trailing newline. Status goes to
 stderr, for example `Vauth token: reused · 11h`.
 
-The Node library returns the token. Its CLI uses cnyks with `--ir://raw` to write
-that result. `vauth-login --help` prints the generated command list on stderr;
-`--ir://run=version` selects the version method directly.
-
-Capture the token in a shell variable:
+Capture it in a shell variable:
 
 ```bash
 VAULT_TOKEN=$(vauth-login)
 ```
+
+Force a fresh login:
+
+```bash
+vauth-login --renew
+```
+
+Check the version or show help:
+
+```bash
+vauth-login version
+vauth-login --help
+```
+
+`login` and `connect` are optional aliases for the default operation. The Node
+library returns the token; cnyks writes that result with `--ir://raw`. Its help
+prints the generated command list on stderr, and `--ir://run=version` selects
+the version method directly.
 
 ## Configuration
 
@@ -67,56 +93,51 @@ autodiscovers the Pageant (0.75+) named pipe, then the OpenSSH agent pipe.
 Disk caching requires an SSH agent; JWT authentication can still work. The Node
 implementation uses ssh2's Pageant transport when no Windows socket is configured.
 
-## Token lifecycle and cache
+## What It Does
 
 The inherited `VAULT_TOKEN` takes priority over the disk cache. When authentication
 is configured, an uncached inherited token is validated with `lookup-self`.
-The cache is `~/.vauth/tokens/<session-sha256>.creds`, encrypted/authenticated by
-ssh-agent-crypt v3. The session hash and JSON payload are identical between
-Node and Go: either implementation can read the other's cache. The native
-Windows cache is under the Windows user's home; the WSL cache is under the Linux
-user's home.
+A usable cached token is reused locally. In the last third of its lease it is
+renewed if renewable, otherwise replaced by a fresh login. An expired cache or a
+400/403 from token lookup/renewal triggers login; other lookup/renewal failures
+propagate to the caller. `--renew` forces a fresh login.
 
-A usable cached token is reused locally without contacting Vault. In the last
-third of its lease it is renewed if renewable, otherwise replaced by a fresh
-login. An expired cache or a 400/403 from token lookup/renewal triggers login;
-network and server failures are not treated as invalid tokens. `--renew` ignores
-both inherited and cached tokens. Without authentication configuration, the
-library ignores inherited/cache tokens and the CLI fails rather than reporting
-an empty token as success.
+The cache is `~/.vauth/tokens/<session-sha256>.creds`, encrypted and authenticated
+by ssh-agent-crypt v3. The session hash and JSON payload are identical between
+Node and Go: either implementation can read the other's cache. Native Windows
+uses the Windows user's home; WSL uses the Linux user's home.
 
 Cache encryption chooses `VAUTH_USER_IDENTITY`, then `VAUTH_USER_MAIL`, then the
-ssh-agent-crypt default selector. Decryption uses the fingerprint embedded in the
-armor. Writes use distinct temporary files and atomic replacement; normal reuse
-does not rewrite the cache. Cache failures do not expose tokens or prevent a
-successful login. `token_cache: false` disables cache access entirely.
+ssh-agent-crypt default selector. Decryption uses the fingerprint embedded in
+the armor. Writes use distinct temporary files and atomic replacement; normal
+reuse leaves the cache unchanged. Cache failures keep the token available for
+the current call. `token_cache: false` disables cache access.
 
-## API and tests
-
-See [API_and_tests.md](API_and_tests.md) for Node/Go APIs, transport and test details.
-Both APIs expose connection, token lookup and Vault HTTP transport for use by
-other applications.
-
-## Security boundary
+## Security
 
 The selected configuration file determines the Vault origin and authentication
-role. Review it before permitting SSH-agent signing.
-Whoever controls the agent socket can decrypt its caches. Tokens are bearer
-credentials: keep tokens out of logs, shell traces and plaintext files.
+role. Review it before permitting SSH-agent signing. Whoever controls the agent
+socket can decrypt its caches. Tokens are bearer credentials: keep them out of
+logs, shell traces and plaintext files.
 
 The Node transport uses nyks's 60-second response deadline, from completion of
 the send through headers and body reading. The Go HTTP client has a 60-second
 request timeout. Redirect responses are handled as HTTP statuses. HTTP errors
 expose status/body to programmatic callers; printable messages contain the status.
 Go callers overriding `HTTPClient` own its redirect/timeout policy. Cache reuse
-intentionally does not check revocation online; use `LookupSelf`/`lookupSelf` when
-that validation is needed. Vault enforces server-side authorization.
+uses local validity information; use `LookupSelf`/`lookupSelf` for online token
+validation. Vault enforces server-side authorization.
+
+## API & SDK
+
+Node module, Go module, token lifecycle, Vault HTTP transport and the test matrix:
+[API_and_tests.md](API_and_tests.md).
 
 ## Credits
 
-- François Leurent / [131](https://github.com/131)
-- Go/Node implementation and validation with OpenAI Codex
-- ssh-agent-crypt and its contributors
-- Code signing courtesy of Essilor International
+- [François Leurent/131](https://github.com/131)
+- [OpenAI](https://openai.com) Codex, in collaboration
+- [ssh-agent-crypt](https://github.com/131/ssh-agent-crypt) and its contributors
+- Code signing, courtesy of Essilor International
 
 ISC license.
