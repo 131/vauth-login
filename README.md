@@ -19,10 +19,11 @@ Or install the Go CLI:
 go install github.com/131/vauth-login/cmd/vauth-login@latest
 ```
 
-The Node CLI exposes the same commands:
+The Node CLI exposes the same commands. The first npm-registry publication is
+pending; install the tagged source in the meantime:
 
 ```bash
-npm install -g vauth-login
+npm install -g 'git+ssh://git@github.com/131/vauth-login.git#v1.0.0'
 ```
 
 ## Use
