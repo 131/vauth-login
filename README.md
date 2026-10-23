@@ -119,10 +119,29 @@ logs, shell traces and plaintext files.
 Node module, Go module, token lifecycle, Vault HTTP transport and the test matrix:
 [API_and_tests.md](API_and_tests.md).
 
+## Security audit
+
+Two independent reviews of the design and of the two implementations, each
+scoring Coolness, Robustness and Safety out of 20:
+[SECURITY_AUDIT_fable-5.1.md](SECURITY_AUDIT_fable-5.1.md) and
+[SECURITY_AUDIT_gpt-6.1-sol.md](SECURITY_AUDIT_gpt-6.1-sol.md).
+
+| Criterion | Codex (Claude Fable 5.1) | Codex (GPT 6.1) |
+| --- | ---: | ---: |
+| ✨ **Coolness** | 17/20 | 18/20 |
+| Robustness | 16/20 | 14/20 |
+| Safety | 14/20 | 13/20 |
+
+Both reviews converge on the same items: the trust model of a `./.vauthrc`
+found in the current directory, cached tokens trusted until expiry without a
+revocation check, and the Node CLI exiting 0 with an empty token when no
+authentication method is configured. Scores are opinions, not a certification.
+
 ## Credits
 
 - [François Leurent/131](https://github.com/131)
-- [OpenAI](https://openai.com) Codex, in collaboration
+- [OpenAI](https://openai.com) Codex (GPT 6.1-sol), in collaboration
+- [Anthropic](https://www.anthropic.com) Claude (Fable 5.1), in collaboration
 - [ssh-agent-crypt](https://github.com/131/ssh-agent-crypt) and its contributors
 - Code signing, courtesy of Essilor International
 
