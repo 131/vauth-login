@@ -65,10 +65,9 @@ ssh_auth:
 token_cache: true
 ```
 
-Recognized keys: `vault_addr`, `ssh_auth`, `jwt_auth`, `token_cache`, and
-`ssh-agent-crypt`. The last key is retained for configuration compatibility;
-local encrypted secret files and their environment expansion are outside this
-package’s scope.
+Recognized keys: `vault_addr`, `ssh_auth`, `jwt_auth`, and `token_cache`.
+All other configuration sections are ignored; local encrypted secret files and
+secret/environment expansion are outside this package’s scope.
 
 SSH authentication uses `SSH_AUTH_SOCK`. Without it, the native Windows binary
 autodiscovers the Pageant (0.75+) named pipe, then the OpenSSH agent pipe. It does

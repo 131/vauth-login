@@ -674,11 +674,11 @@ for(const command of [[], ['login'], ['connect']]) {
   });
 }
 
-test('constructor ignores env.* and expands authentication macros only', async t => {
+test('constructor ignores unrelated configuration and expands authentication macros only', async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vauth-login-rc-'));
   t.after(() => fs.rmSync(directory, {recursive : true, force : true}));
   const rc = path.join(directory, '.vauthrc');
-  fs.writeFileSync(rc, 'vault_addr: https://vault.example.test\nssh_auth: {role: "$${env.TEST_AUTH_ROLE}"}\nenv: {map: "not a mapping", gitlab: true}\n');
+  fs.writeFileSync(rc, 'vault_addr: https://vault.example.test\nssh_auth: {role: "$${env.TEST_AUTH_ROLE}"}\nenv: {map: "not a mapping", gitlab: true}\nssh-agent-crypt: [ignored, "$${env.MISSING}"]\n');
   const script = `const V = require(${JSON.stringify(path.resolve(__dirname, '..', 'index.js'))}); const v = new V(); process.stdout.write(JSON.stringify(v.rc));`;
   const out = await exec(process.execPath, ['-e', script], {cwd : directory, env : {...process.env, VAUTHRC : rc, TEST_AUTH_ROLE : 'role-test'}});
   assert.deepEqual(JSON.parse(out.stdout), {vault_addr : 'https://vault.example.test', ssh_auth : {role : 'role-test'}});

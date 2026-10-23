@@ -65,7 +65,7 @@ class VauthLogin {
       let rc = parse(body);
       let env = process.env;
 
-      this.rc = walk(Object.fromEntries(['vault_addr', 'ssh_auth', 'jwt_auth', 'token_cache', 'ssh-agent-crypt']
+      this.rc = walk(Object.fromEntries(['vault_addr', 'ssh_auth', 'jwt_auth', 'token_cache']
         .filter(key => rc && Object.hasOwn(rc, key)).map(key => [key, rc[key]])), v => replaceEnv(v, {env}));
     }
 

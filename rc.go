@@ -15,11 +15,10 @@ import (
 
 // RC is the parsed .vauthrc, after $${env.X} expansion.
 type RC struct {
-	VaultAddr  string      `yaml:"vault_addr"`
-	SSHAuth    *SSHAuth    `yaml:"ssh_auth"`
-	JWTAuth    *JWTAuth    `yaml:"jwt_auth"`
-	TokenCache *bool       `yaml:"token_cache"`
-	AgentCrypt *AgentCrypt `yaml:"ssh-agent-crypt"`
+	VaultAddr  string   `yaml:"vault_addr"`
+	SSHAuth    *SSHAuth `yaml:"ssh_auth"`
+	JWTAuth    *JWTAuth `yaml:"jwt_auth"`
+	TokenCache *bool    `yaml:"token_cache"`
 
 	// authKey is the JSON of {ssh_auth, jwt_auth} in document order, as
 	// JSON.stringify would render them: it isolates the token cache.
@@ -71,13 +70,6 @@ type JWTAuth struct {
 	Path string `yaml:"path"`
 	JWT  string `yaml:"jwt"`
 	Role string `yaml:"role"`
-}
-
-// AgentCrypt points to a local ssh-agent-crypt armored JSON file whose keys
-// feed $${secrets.X}.
-type AgentCrypt struct {
-	Path     string `yaml:"path"`
-	Identity string `yaml:"identity"`
 }
 
 // Lookup resolves dotted paths ($${env.X}) in nested string maps.
@@ -263,7 +255,7 @@ func LocateRC(environ map[string]string, cwd, home string) string {
 }
 
 // ParseRC parses a .vauthrc body and expands its $${env.X} macros against
-// environ. Environment/profile configuration (env.*) is ignored.
+// environ. All other configuration sections are ignored.
 func ParseRC(body []byte, file string, environ map[string]string) (*RC, error) {
 	var document yaml.Node
 	if err := yaml.Unmarshal(body, &document); err != nil {
@@ -279,7 +271,7 @@ func ParseRC(body []byte, file string, environ map[string]string) (*RC, error) {
 	var content []*yaml.Node
 	for i := 0; i+1 < len(root.Content); i += 2 {
 		switch root.Content[i].Value {
-		case "vault_addr", "ssh_auth", "jwt_auth", "token_cache", "ssh-agent-crypt":
+		case "vault_addr", "ssh_auth", "jwt_auth", "token_cache":
 			content = append(content, root.Content[i], root.Content[i+1])
 		}
 	}
