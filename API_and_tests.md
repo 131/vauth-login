@@ -24,8 +24,7 @@ handle the status yourself. No automatic retry or redirect is performed.
 `VauthLogin.HTTPError` has `status`, `body`, and compatibility
 `res.statusCode` fields. Its message contains only the status, not the body.
 
-The client retains vvauth's `rc`, `VAULT_ADDR`, `VAULT_TOKEN`, and private cache
-helpers for the extraction. `connect()` can return undefined when authentication
+The client exposes `rc`, `VAULT_ADDR`, and `VAULT_TOKEN`. `connect()` can return undefined when authentication
 is unavailable; CLI/login output instead rejects an empty token.
 
 ## Go
@@ -82,8 +81,7 @@ go test -race ./...
 GOOS=windows GOARCH=amd64 go build ./cmd/vauth-login
 ```
 
-The authentication/cache suites are copied from vvauth, with its environment,
-profile and shell-installer tests removed. Tests create an isolated SSH agent
+The authentication/cache suites create an isolated SSH agent
 with a throwaway Ed25519 key and a loopback fake Vault; no real Vault or user
 credentials are needed. Linux needs `ssh-agent`, `ssh-keygen`, and `ssh-add`.
 The Windows CI job cross-checks the native build; actual Pageant login is an
@@ -100,7 +98,7 @@ source/JSON output, renewal, caching and argument errors.
 Live installation validation must clear the inherited token, force a new login,
 validate it with Vault `lookup-self`, then invoke the installed binary again with
 no inherited token and confirm the encrypted cache is reused. Compare Node/Go
-and existing vvauth against the same cache without logging any token. On Windows,
+against the same cache without logging any token. On Windows,
 clear `SSH_AUTH_SOCK` too to exercise Pageant autodiscovery. Verify the installed
 EXE's Authenticode signature and compare both installed binaries to the release's
 `SHA256SUMS`; do not install a locally cross-built unsigned EXE.

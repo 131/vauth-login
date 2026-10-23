@@ -2,9 +2,8 @@
 
 Standalone Vault authentication using an SSH agent or JWT, with encrypted token
 caching. Native Go binaries for Windows and Linux, plus a Node module and CLI.
-Extracted from [vvauth](https://github.com/131/vvauth): authentication only, no
-identity-profile, secret/environment expansion, shell installation, or child
-process execution.
+Authentication only: no identity-profile or secret/environment expansion,
+shell installation, or child process execution.
 
 ## Install
 
@@ -53,9 +52,8 @@ fi
 ## Configuration
 
 The first existing file wins: `VAUTHRC`, `./.vauthrc`, then `~/.vauthrc`.
-`VAULT_ADDR` is the fallback when `vault_addr` is absent. Existing vvauth
-configuration files work without changes; `env.*` is ignored, including malformed
-or hostile environment-map keys. Authentication fields support `$${env.NAME}`
+`VAULT_ADDR` is the fallback when `vault_addr` is absent. `env.*` is ignored,
+including malformed or hostile environment-map keys. Authentication fields support `$${env.NAME}`
 substitution from the process environment, not profile or secret expansion.
 
 ```yaml
@@ -69,8 +67,8 @@ token_cache: true
 
 Recognized keys: `vault_addr`, `ssh_auth`, `jwt_auth`, `token_cache`, and
 `ssh-agent-crypt`. The last key is retained for configuration compatibility;
-local encrypted secret files and their environment expansion belong to vvauth,
-not this package.
+local encrypted secret files and their environment expansion are outside this
+package’s scope.
 
 SSH authentication uses `SSH_AUTH_SOCK`. Without it, the native Windows binary
 autodiscovers the Pageant (0.75+) named pipe, then the OpenSSH agent pipe. It does
@@ -83,8 +81,8 @@ ssh2's Pageant transport when no Windows socket is configured.
 The inherited `VAULT_TOKEN` takes priority over the disk cache. When authentication
 is configured, an uncached inherited token is validated with `lookup-self`.
 The cache is `~/.vauth/tokens/<session-sha256>.creds`, encrypted/authenticated by
-ssh-agent-crypt v3. The session hash and JSON payload match vvauth's Node and Go
-implementations: either implementation can read the other's cache. The native
+ssh-agent-crypt v3. The session hash and JSON payload are identical between
+Node and Go: either implementation can read the other's cache. The native
 Windows cache is under the Windows user's home; the WSL cache is under the Linux
 user's home.
 
@@ -111,8 +109,8 @@ can share the authentication boundary without reimplementing it.
 ## Security boundary
 
 A configuration file chooses the Vault origin and authentication role. This
-package preserves vvauth's configuration precedence; it does not make a cloned
-repository's `.vauthrc` trustworthy. Review it before permitting SSH-agent signing.
+package uses the configuration precedence described above; it does not make a
+cloned repository's `.vauthrc` trustworthy. Review it before permitting SSH-agent signing.
 Whoever controls the agent socket can decrypt its caches. Tokens are bearer
 credentials: don't log stdout, enable shell tracing around exports, or store tokens
 in plaintext files.
@@ -128,8 +126,8 @@ server-side authorization.
 ## Credits
 
 - François Leurent / [131](https://github.com/131)
-- Go/Node extraction and validation with OpenAI Codex
-- Original vvauth and ssh-agent-crypt implementations and contributors
+- Go/Node implementation and validation with OpenAI Codex
+- ssh-agent-crypt and its contributors
 - Code signing courtesy of Essilor International
 
-ISC license, inherited from vvauth.
+ISC license.
