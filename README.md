@@ -2,7 +2,9 @@
 
 ## A Vault token, ready to use
 
-Authenticate to Vault with your SSH agent or JWT and get the token on stdout.
+Authenticate to [Vault](https://developer.hashicorp.com/vault/docs) with your
+[SSH agent](https://github.com/42wim/vault-plugin-auth-ssh#using-ssh-agent) or JWT
+and get the token on stdout.
 The encrypted cache keeps it ready for the next call. Available as a Node module
 and CLI, a Go module and CLI, and binaries for Windows and Linux.
 
@@ -90,13 +92,9 @@ token_cache: true
 Configuration keys: `vault_addr`, `ssh_auth`, `jwt_auth`, `token_cache`, and
 `known_vaults`.
 
-A `./.vauthrc` belongs to the project; `~/.vauthrc` belongs to the user. Every
-HTTP call to a project-selected Vault is allowed only when it is the
-`vault_addr` of `~/.vauthrc`, appears in its `known_vaults`, or matches environment
-`VAULT_ADDR`. Otherwise the operation fails without a prompt. The environment
-address is trusted in memory, without rewriting `~/.vauthrc`. Explicit
-`VAUTHRC` and home configuration are operator-controlled. Reusing an inherited
-or valid cached token is offline and does not require this address check.
+A project-selected Vault must match `VAULT_ADDR`, the `vault_addr` in
+`~/.vauthrc`, or one of its `known_vaults`. Explicit `VAUTHRC` and home
+configuration are trusted operator inputs.
 
 ```yaml
 # ~/.vauthrc
@@ -108,27 +106,30 @@ known_vaults:
 SSH authentication uses `SSH_AUTH_SOCK`. Without it, the native Windows binary
 autodiscovers the Pageant (0.75+) named pipe, then the OpenSSH agent pipe.
 Disk caching requires an SSH agent; JWT authentication can still work. The Node
-implementation uses ssh2's Pageant transport when no Windows socket is configured.
+implementation uses [ssh2](https://github.com/mscdex/ssh2)'s Pageant transport
+when no Windows socket is configured.
 
-## What It Does
+## Tokens and caching
 
-An inherited `VAULT_TOKEN` is the caller's: it is returned as is, announced as
-`Vauth token: inherited`, and never looked up, renewed or written to the cache.
-Without it, a usable cached token is reused locally. In the last third of its lease it is
-renewed if renewable, otherwise replaced by a fresh login. An expired cache or a
-400/403 from token lookup/renewal triggers login; other lookup/renewal failures
-propagate to the caller. `--renew` forces a fresh login.
+`VAULT_TOKEN` takes precedence: it is returned unchanged, without contacting
+Vault or writing it to the cache. Otherwise, vauth-login reuses a cached token
+or authenticates with the configured SSH/JWT method. `--renew` skips reuse and
+forces fresh authentication.
 
-The cache is `~/.vauth/tokens/<session-sha256>.creds`, encrypted and authenticated
-by ssh-agent-crypt v3. The session hash and JSON payload are identical between
-Node and Go: either implementation can read the other's cache. Native Windows
-uses the Windows user's home; WSL uses the Linux user's home.
+In the last third of a cached token's lease, vauth-login renews it if renewable
+or logs in again if not. Expired tokens and renewals rejected with 400/403 also
+trigger login. Network and server errors remain errors, not a
+reason to silently reauthenticate.
 
-Cache encryption chooses `VAUTH_USER_IDENTITY`, then `VAUTH_USER_MAIL`, then the
-ssh-agent-crypt default selector. Decryption uses the fingerprint embedded in
-the armor. Writes use distinct temporary files and atomic replacement; normal
-reuse leaves the cache unchanged. Cache failures keep the token available for
-the current call. `token_cache: false` disables cache access.
+The cache lives at `~/.vauth/tokens/<session-sha256>.creds`, encrypted and
+authenticated by [ssh-agent-crypt](https://github.com/131/ssh-agent-crypt).
+Node and Go share its format; each runtime uses its own home directory.
+Set `token_cache: false` to disable it. A cache-write failure does not prevent
+returning the token.
+
+Encryption selects `VAUTH_USER_IDENTITY`, then `VAUTH_USER_MAIL`, then the
+[ssh-agent-crypt](https://github.com/131/ssh-agent-crypt) default selector.
+Decryption uses the key fingerprint stored in the cache.
 
 ## Security
 
