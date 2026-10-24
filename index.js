@@ -283,7 +283,7 @@ class VauthLogin {
     return auth;
   }
 
-  VaultURL(apiPath) {
+  _vault_url(apiPath) {
     return `${trim(this.VAULT_ADDR || '', '/')}/v1/${String(apiPath).replace(/^\/+/, '')}`;
   }
 
@@ -292,7 +292,7 @@ class VauthLogin {
     const headers = {};
     if(token) headers['X-Vault-Token'] = token;
     if(payload !== null) headers['Content-Type'] = 'application/json';
-    const target = new URL(this.VaultURL(apiPath));
+    const target = new URL(this._vault_url(apiPath));
     const query = {
       protocol : target.protocol, hostname : target.hostname.replace(/^\[(.*)\]$/, '$1'),
       port : target.port, path : target.pathname + target.search,

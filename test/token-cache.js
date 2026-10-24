@@ -826,7 +826,7 @@ test('public lookupSelf and transport expose token metadata without profile read
   assert.equal(metadata.entity_id, 'test-entity');
   assert.equal(metadata.ttl, 12 * HOUR);
   assert.equal(metadata.lease_duration, 24 * HOUR);
-  assert.equal(v.VaultURL('/auth/token/lookup-self'), v.VAULT_ADDR + '/v1/auth/token/lookup-self');
+  assert.equal(v._vault_url('/auth/token/lookup-self'), v.VAULT_ADDR + '/v1/auth/token/lookup-self');
   assert.deepEqual(requests.map(r => r.path), ['/v1/auth/jwt/login', '/v1/auth/token/lookup-self']);
 });
 
@@ -1054,9 +1054,9 @@ test('Node and Go expose one converged API without compatibility aliases', async
   const v = client();
   assert.equal(Vauth.Version(), require('../package.json').version);
   assert.deepEqual(Object.getOwnPropertyNames(Vauth.prototype).filter(name => name !== 'constructor' && !name.startsWith('_')).sort(),
-    ['Connect', 'LookupSelf', 'Request', 'VaultURL']);
+    ['Connect', 'LookupSelf', 'Request']);
   assert.equal(Vauth.version, undefined);
-  assert.equal(v.VaultURL('/auth/token/lookup-self'), v.VAULT_ADDR + '/v1/auth/token/lookup-self');
+  assert.equal(v._vault_url('/auth/token/lookup-self'), v.VAULT_ADDR + '/v1/auth/token/lookup-self');
   assert.equal(v._token_cache_file(), file);
   assert.equal(path.basename(file), v._token_cache_key() + '.creds');
   const token = await v.Connect();
@@ -1084,7 +1084,7 @@ test('SDK transport rejects unknown project Vaults after offline token inheritan
       const v = new Vauth();
       assert.equal(v._safe_vault, false);
       assert.equal(await v.Connect(), 'inherited-token');
-      assert.equal(v.VaultURL('auth/token/lookup-self'), ${JSON.stringify(addr + '/v1/auth/token/lookup-self')});
+      assert.equal(v._vault_url('auth/token/lookup-self'), ${JSON.stringify(addr + '/v1/auth/token/lookup-self')});
       for(const call of [
         () => v.LookupSelf(),
         () => v.Request('GET', 'auth/token/lookup-self', 'inherited-token'),

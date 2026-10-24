@@ -32,8 +32,8 @@ type auth struct {
 	Renewable     bool   `json:"renewable"`
 }
 
-// VaultURL returns an API URL relative to this configured Vault.
-func (v *Vauth) VaultURL(path string) string {
+// vaultURL returns an API URL relative to this configured Vault.
+func (v *Vauth) vaultURL(path string) string {
 	return strings.TrimRight(v.VaultAddr, "/") + "/v1/" + strings.TrimLeft(path, "/")
 }
 
@@ -52,7 +52,7 @@ func (v *Vauth) Request(method, path, token string, payload any, expect int) (in
 		}
 		body = bytes.NewReader(encoded)
 	}
-	req, err := http.NewRequest(method, v.VaultURL(path), body)
+	req, err := http.NewRequest(method, v.vaultURL(path), body)
 	if err != nil {
 		return 0, nil, err
 	}

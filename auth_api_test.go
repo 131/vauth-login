@@ -48,7 +48,7 @@ func TestPublicLookupAndTransport(t *testing.T) {
 	}
 	equal(t, info.EntityID, "test-entity")
 	equal(t, info.LeaseDuration, int64(24*hour))
-	equal(t, v.VaultURL("/auth/token/lookup-self"), f.server.URL+"/v1/auth/token/lookup-self")
+	equal(t, v.vaultURL("/auth/token/lookup-self"), f.server.URL+"/v1/auth/token/lookup-self")
 	status, _, err := v.Request("GET", "auth/token/lookup-self", token, nil, 200)
 	if err != nil {
 		t.Fatal(err)
@@ -169,7 +169,7 @@ func TestPublicTransportRejectsUnknownVaultAfterInheritance(t *testing.T) {
 		t.Fatal(err)
 	}
 	equal(t, token, "inherited-token")
-	equal(t, v.VaultURL("auth/token/lookup-self"), f.server.URL+"/v1/auth/token/lookup-self")
+	equal(t, v.vaultURL("auth/token/lookup-self"), f.server.URL+"/v1/auth/token/lookup-self")
 	check := func(err error) {
 		t.Helper()
 		if err == nil || !strings.Contains(err.Error(), "Unknown vault") {
