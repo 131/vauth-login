@@ -134,14 +134,14 @@ func TestUnrelatedEncryptionConfigIgnored(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := (&Vauth{RC: *baseline, VaultAddr: baseline.VaultAddr}).TokenCacheKey()
+	expected := (&Vauth{RC: *baseline, VaultAddr: baseline.VaultAddr}).tokenCacheKey()
 	for _, value := range []string{"null", "not-a-mapping", "[ignored, '$${env.MISSING}']", "{path: missing-file, identity: ignored}"} {
 		rc, err := ParseRC([]byte(body+"ssh-agent-crypt: "+value+"\n"), ".vauthrc", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		equal(t, rc.AuthKey(), baseline.AuthKey())
-		equal(t, (&Vauth{RC: *rc, VaultAddr: rc.VaultAddr}).TokenCacheKey(), expected)
+		equal(t, (&Vauth{RC: *rc, VaultAddr: rc.VaultAddr}).tokenCacheKey(), expected)
 	}
 }
 

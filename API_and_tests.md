@@ -10,8 +10,6 @@ Node and Go use the same client method names and argument order:
 | `LookupSelf` | `token` | Token metadata |
 | `Request` | `method, path, token, payload, expect` | HTTP status and body |
 | `VaultURL` | `path` | Configured Vault API URL |
-| `TokenCacheKey` | None | Cache identity hash |
-| `TokenCacheFile` | None | Cache pathname |
 
 Node returns promises for asynchronous operations; Go returns values and an
 error. Node keeps optional argument defaults; Go supplies them explicitly.
@@ -35,7 +33,6 @@ const {status, body} = await client.Request(
 
 `Connect(renew = false)` returns the token.
 `VauthLogin.Version()` returns the package version.
-`TokenCacheKey()` and `TokenCacheFile()` expose the same cache helpers as Go.
 `VaultURL(path)` constructs an API URL under the configured Vault `/v1/`.
 `Request(method, path, token = '', payload = null, expect = 200)` sends object
 payloads as JSON and returns `{status, body}` (a Buffer). Set `expect = 0` to
@@ -88,8 +85,9 @@ address is refused without interaction. No confirmation callback is exposed.
 `Renewable`, `CreationTTL`, `EntityID`, and `LeaseDuration`.
 `Request(method, path, token, payload, expect)` returns `(status, body, error)`;
 `expect = 0` lets the caller handle statuses. `HTTPError` exposes `Status`/`Body`.
-`VaultURL(path)`, `TokenCacheKey()`, `TokenCacheFile()`, `LocateRC`, `ParseRC`,
-`Environ` and `HumanDiff` support embedding.
+`VaultURL(path)`, `LocateRC`, `ParseRC`, `Environ` and `HumanDiff` support
+embedding. Cache-key and cache-path helpers are implementation details, not
+public client methods.
 
 `Connect(false)` returns an inherited token offline, even without authentication
 configuration. Otherwise, without an auth method it returns an empty string in

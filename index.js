@@ -101,22 +101,22 @@ class VauthLogin {
       throw new Error(`Unknown vault ${normalizeAddr(this.VAULT_ADDR)}, selected by ${this.rc_file}. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.`);
   }
 
-  TokenCacheKey() {
+  _token_cache_key() {
     const {ssh_auth, jwt_auth} = this.rc;
     return createHash('sha256').update(JSON.stringify({
       vault_addr : trim(this.VAULT_ADDR || '', '/'), ssh_auth, jwt_auth,
     })).digest('hex');
   }
 
-  TokenCacheFile() {
-    return path.join(os.homedir(), '.vauth', 'tokens', this.TokenCacheKey() + '.creds');
+  _token_cache_file() {
+    return path.join(os.homedir(), '.vauth', 'tokens', this._token_cache_key() + '.creds');
   }
 
   async _read_token_cache() {
     if(this.rc.token_cache === false)
       return;
     try {
-      const armor = fs.readFileSync(this.TokenCacheFile(), 'utf8');
+      const armor = fs.readFileSync(this._token_cache_file(), 'utf8');
       return JSON.parse(await decrypt(armor));
     } catch(err) {}
   }
@@ -125,7 +125,7 @@ class VauthLogin {
     if(this.rc.token_cache === false)
       return;
     const ttl = metadata.ttl === undefined ? metadata.lease_duration : metadata.ttl;
-    const file = this.TokenCacheFile();
+    const file = this._token_cache_file();
     const temporary = file + '.' + randomUUID() + '.next';
     try {
       const {lease_duration} = metadata;

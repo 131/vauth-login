@@ -143,7 +143,7 @@ func (f *fixture) paths() []string {
 
 func (f *fixture) read(v *Vauth) tokenCache {
 	f.t.Helper()
-	armor, err := os.ReadFile(v.TokenCacheFile())
+	armor, err := os.ReadFile(v.tokenCacheFile())
 	if err != nil {
 		f.t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func (f *fixture) read(v *Vauth) tokenCache {
 
 func (f *fixture) write(v *Vauth, cache tokenCache) {
 	f.t.Helper()
-	if err := v.writeTokenCache(v.TokenCacheFile(), v.TokenCacheFile()+".next", &cache); err != nil {
+	if err := v.writeTokenCache(v.tokenCacheFile(), v.tokenCacheFile()+".next", &cache); err != nil {
 		f.t.Fatal(err)
 	}
 }
@@ -216,14 +216,14 @@ func TestLoginPersistsAndReuses(t *testing.T) {
 	if cache.ExpiresAt == nil || *cache.ExpiresAt < time.Now().UnixMilli()+23*hour*1000 {
 		t.Fatalf("expires_at %v", cache.ExpiresAt)
 	}
-	info, _ := os.Stat(first.TokenCacheFile())
+	info, _ := os.Stat(first.tokenCacheFile())
 	equal(t, info.Mode().Perm(), 0o600)
-	info, _ = os.Stat(filepath.Dir(first.TokenCacheFile()))
+	info, _ = os.Stat(filepath.Dir(first.tokenCacheFile()))
 	equal(t, info.Mode().Perm(), 0o700)
 	second := f.client()
 	equal(t, connect(t, second, false), "fresh-token")
 	equalPaths(t, f.paths(), "/v1/auth/jwt/login")
-	entries, _ := os.ReadDir(filepath.Dir(first.TokenCacheFile()))
+	entries, _ := os.ReadDir(filepath.Dir(first.tokenCacheFile()))
 	equal(t, len(entries), 1)
 }
 
@@ -336,8 +336,8 @@ func TestNonExpiringTokensReused(t *testing.T) {
 func TestCorruptCacheReplaced(t *testing.T) {
 	f := newFixture(t, fixtureOptions{})
 	v := f.client()
-	os.MkdirAll(filepath.Dir(v.TokenCacheFile()), 0o700)
-	os.WriteFile(v.TokenCacheFile(), []byte("{broken"), 0o600)
+	os.MkdirAll(filepath.Dir(v.tokenCacheFile()), 0o700)
+	os.WriteFile(v.tokenCacheFile(), []byte("{broken"), 0o600)
 	equal(t, connect(t, v, false), "fresh-token")
 	equal(t, f.read(v).Token, "fresh-token")
 }
@@ -345,8 +345,8 @@ func TestCorruptCacheReplaced(t *testing.T) {
 func TestPlaintextCacheNotAccepted(t *testing.T) {
 	f := newFixture(t, fixtureOptions{})
 	v := f.client()
-	os.MkdirAll(filepath.Dir(v.TokenCacheFile()), 0o700)
-	os.WriteFile(v.TokenCacheFile(), []byte(`{"token":"plain-token","lease_duration":43200,"renewable":true,"expires_at":null}`), 0o600)
+	os.MkdirAll(filepath.Dir(v.tokenCacheFile()), 0o700)
+	os.WriteFile(v.tokenCacheFile(), []byte(`{"token":"plain-token","lease_duration":43200,"renewable":true,"expires_at":null}`), 0o600)
 	equal(t, connect(t, v, false), "fresh-token")
 	equalPaths(t, f.paths(), "/v1/auth/jwt/login")
 }
@@ -358,19 +358,19 @@ func TestCacheIsolation(t *testing.T) {
 	second := f.client()
 	second.RC.JWTAuth.Role = "other-role"
 	equal(t, connect(t, second, false), "fresh-token")
-	if first.TokenCacheFile() == second.TokenCacheFile() {
+	if first.tokenCacheFile() == second.tokenCacheFile() {
 		t.Fatal("cache files should differ")
 	}
 	equal(t, f.read(first).Token, "cached-token")
 	equal(t, f.read(second).Token, "fresh-token")
 	third := f.client()
 	third.VaultAddr = "http://other-vault.test"
-	if third.TokenCacheKey() == first.TokenCacheKey() {
+	if third.tokenCacheKey() == first.tokenCacheKey() {
 		t.Fatal("cache keys should differ")
 	}
-	entries, _ := os.ReadDir(filepath.Dir(first.TokenCacheFile()))
+	entries, _ := os.ReadDir(filepath.Dir(first.tokenCacheFile()))
 	equal(t, len(entries), 2)
-	armor, _ := os.ReadFile(first.TokenCacheFile())
+	armor, _ := os.ReadFile(first.tokenCacheFile())
 	if bytes.Contains(armor, []byte("test-jwt")) || bytes.Contains(armor, []byte("cached-token")) {
 		t.Fatal("cache leaks secrets")
 	}
@@ -380,15 +380,15 @@ func TestTokenCacheKeyMatchesNode(t *testing.T) {
 	// sha256 of JSON.stringify({vault_addr, ssh_auth, jwt_auth}) as the Node
 	// implementation renders it (undefined members omitted).
 	v := &Vauth{VaultAddr: "https://vault.example.test/", RC: RC{SSHAuth: &SSHAuth{Role: "alice"}}}
-	equal(t, v.TokenCacheKey(), sha256Hex(`{"vault_addr":"https://vault.example.test","ssh_auth":{"role":"alice"}}`))
+	equal(t, v.tokenCacheKey(), sha256Hex(`{"vault_addr":"https://vault.example.test","ssh_auth":{"role":"alice"}}`))
 	v = &Vauth{VaultAddr: "https://vault.example.test", RC: RC{JWTAuth: &JWTAuth{Path: "jwt", JWT: "x", Role: "r"}}}
-	equal(t, v.TokenCacheKey(), sha256Hex(`{"vault_addr":"https://vault.example.test","jwt_auth":{"path":"jwt","jwt":"x","role":"r"}}`))
+	equal(t, v.tokenCacheKey(), sha256Hex(`{"vault_addr":"https://vault.example.test","jwt_auth":{"path":"jwt","jwt":"x","role":"r"}}`))
 	rc, err := ParseRC([]byte("vault_addr: https://vault.example.test\nssh_auth:\n  role: $${env.USER}\n"), ".vauthrc", map[string]string{"USER": "bob"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	v = &Vauth{VaultAddr: rc.VaultAddr, RC: *rc}
-	equal(t, v.TokenCacheKey(), sha256Hex(`{"vault_addr":"https://vault.example.test","ssh_auth":{"role":"bob"}}`))
+	equal(t, v.tokenCacheKey(), sha256Hex(`{"vault_addr":"https://vault.example.test","ssh_auth":{"role":"bob"}}`))
 }
 
 func TestRepeatedConnectReusesConnection(t *testing.T) {
@@ -402,8 +402,8 @@ func TestRepeatedConnectReusesConnection(t *testing.T) {
 func TestUnwritableCacheDoesNotPreventLogin(t *testing.T) {
 	f := newFixture(t, fixtureOptions{})
 	v := f.client()
-	os.MkdirAll(filepath.Dir(filepath.Dir(v.TokenCacheFile())), 0o700)
-	os.WriteFile(filepath.Dir(v.TokenCacheFile()), []byte("not a directory"), 0o600)
+	os.MkdirAll(filepath.Dir(filepath.Dir(v.tokenCacheFile())), 0o700)
+	os.WriteFile(filepath.Dir(v.tokenCacheFile()), []byte("not a directory"), 0o600)
 	var stderr bytes.Buffer
 	v.Stderr = &stderr
 	equal(t, connect(t, v, false), "fresh-token")
@@ -499,14 +499,14 @@ func TestNormalReuseNeverWrites(t *testing.T) {
 	v := f.client()
 	f.seed(v, 12*hour)
 	v.VaultToken = "cached-token"
-	before, _ := os.ReadFile(v.TokenCacheFile())
-	stat, _ := os.Stat(v.TokenCacheFile())
+	before, _ := os.ReadFile(v.tokenCacheFile())
+	stat, _ := os.Stat(v.tokenCacheFile())
 	equal(t, connect(t, v, false), "cached-token")
-	after, _ := os.ReadFile(v.TokenCacheFile())
+	after, _ := os.ReadFile(v.tokenCacheFile())
 	if !bytes.Equal(before, after) {
 		t.Fatal("cache rewritten")
 	}
-	again, _ := os.Stat(v.TokenCacheFile())
+	again, _ := os.Stat(v.tokenCacheFile())
 	equal(t, again.ModTime(), stat.ModTime())
 	equal(t, len(f.requests), 0)
 }
@@ -528,7 +528,7 @@ func TestTokenCacheDisabled(t *testing.T) {
 	v := f.client()
 	v.TokenCache = false
 	equal(t, connect(t, v, false), "fresh-token")
-	if _, err := os.Stat(v.TokenCacheFile()); err == nil {
+	if _, err := os.Stat(v.tokenCacheFile()); err == nil {
 		t.Fatal("cache written")
 	}
 	equalPaths(t, f.paths(), "/v1/auth/jwt/login")
@@ -536,10 +536,10 @@ func TestTokenCacheDisabled(t *testing.T) {
 	f = newFixture(t, fixtureOptions{})
 	v = f.client()
 	f.seed(v, 12*hour)
-	before, _ := os.ReadFile(v.TokenCacheFile())
+	before, _ := os.ReadFile(v.tokenCacheFile())
 	v.TokenCache = false
 	equal(t, connect(t, v, false), "fresh-token")
-	after, _ := os.ReadFile(v.TokenCacheFile())
+	after, _ := os.ReadFile(v.tokenCacheFile())
 	if !bytes.Equal(before, after) {
 		t.Fatal("disabled cache touched disk")
 	}
@@ -550,7 +550,7 @@ func TestTokenCacheDisabled(t *testing.T) {
 	v.VaultToken = "environment-token"
 	equal(t, connect(t, v, false), "environment-token")
 	equal(t, len(f.requests), 0)
-	if _, err := os.Stat(v.TokenCacheFile()); err == nil {
+	if _, err := os.Stat(v.tokenCacheFile()); err == nil {
 		t.Fatal("cache written")
 	}
 }
@@ -569,7 +569,7 @@ func TestCacheIsArmorOnly(t *testing.T) {
 	f := newFixture(t, fixtureOptions{})
 	v := f.client()
 	connect(t, v, false)
-	armor, _ := os.ReadFile(v.TokenCacheFile())
+	armor, _ := os.ReadFile(v.tokenCacheFile())
 	if !bytes.HasPrefix(armor, []byte("ssh-agent-crypt:")) || bytes.Contains(armor, []byte("fresh-token")) {
 		t.Fatalf("not armored: %q", armor[:40])
 	}
@@ -591,11 +591,11 @@ func TestWithoutAgentCacheSkipped(t *testing.T) {
 	f := newFixture(t, fixtureOptions{})
 	v := f.client()
 	f.seed(v, 12*hour)
-	before, _ := os.ReadFile(v.TokenCacheFile())
+	before, _ := os.ReadFile(v.tokenCacheFile())
 	v.Agent = ""
 	v.TokenCache = false // as New() does when no agent is configured
 	equal(t, connect(t, v, false), "fresh-token")
-	after, _ := os.ReadFile(v.TokenCacheFile())
+	after, _ := os.ReadFile(v.tokenCacheFile())
 	if !bytes.Equal(before, after) {
 		t.Fatal("existing armor touched")
 	}

@@ -88,12 +88,12 @@ async function fixture(t, options = {}) {
     instance._safe_vault = true; // The fixture's loopback endpoint is explicitly trusted.
     instance.rc = {jwt_auth : {path : 'jwt', jwt : 'test-jwt', role : 'test-role'}};
     instance.VAULT_ADDR = `http://127.0.0.1:${server.address().port}`;
-    instance.TokenCacheFile = () => path.join(directory, '.vauth', 'tokens', instance.TokenCacheKey() + '.creds');
+    instance._token_cache_file = () => path.join(directory, '.vauth', 'tokens', instance._token_cache_key() + '.creds');
     return instance;
   };
-  file = client().TokenCacheFile();
+  file = client()._token_cache_file();
   const remaining = async (instance, ttl) => {
-    const file = instance.TokenCacheFile();
+    const file = instance._token_cache_file();
     const cache = (await readCache(file));
     cache.expires_at = ttl === 0 ? null : Date.now() + ttl * 1000;
     await writeCache(file, cache);
@@ -103,7 +103,7 @@ async function fixture(t, options = {}) {
     if(options.ttl !== undefined)
       await remaining(instance, options.ttl);
   };
-  const read = async instance => readCache(instance.TokenCacheFile());
+  const read = async instance => readCache(instance._token_cache_file());
   return {client, seed, read, requests, file, remaining};
 }
 
@@ -248,12 +248,12 @@ test('cache entries are isolated by Vault address and authentication configurati
   const second = client();
   second.rc.jwt_auth.role = 'other-role';
   assert.equal(await second.Connect(), 'fresh-token');
-  assert.notEqual(first.TokenCacheFile(), second.TokenCacheFile());
+  assert.notEqual(first._token_cache_file(), second._token_cache_file());
   assert.equal((await read(first)).token, 'cached-token');
   assert.equal((await read(second)).token, 'fresh-token');
   const third = client();
   third.VAULT_ADDR = 'http://other-vault.test';
-  assert.notEqual(third.TokenCacheKey(), first.TokenCacheKey());
+  assert.notEqual(third._token_cache_key(), first._token_cache_key());
   assert.equal(fs.readdirSync(path.dirname(file)).length, 2);
   assert.ok(!fs.readFileSync(file, 'utf8').includes('test-jwt'));
 });
@@ -485,7 +485,7 @@ test('token_cache false skips all cache filesystem access', async t => {
   const {client, requests, file} = await fixture(t);
   const instance = client();
   instance.rc.token_cache = false;
-  instance.TokenCacheFile = () => { throw new Error('Disabled cache must not access disk'); };
+  instance._token_cache_file = () => { throw new Error('Disabled cache must not access disk'); };
   assert.equal(await instance.Connect(), 'fresh-token');
   assert.equal(fs.existsSync(file), false);
   assert.deepEqual(requests.map(req => req.path), ['/v1/auth/jwt/login']);
@@ -562,7 +562,7 @@ test('a plaintext cache is not accepted as a token cache', async t => {
 test('without an SSH agent cache is skipped silently', async t => {
   const {client, file} = await fixture(t);
   const instance = client();
-  instance.TokenCacheFile = () => { throw new Error('No agent: no disk access'); };
+  instance._token_cache_file = () => { throw new Error('No agent: no disk access'); };
   const socket = process.env.SSH_AUTH_SOCK;
   const original = console.error;
   const messages = [];
@@ -1054,11 +1054,11 @@ test('Node and Go expose one converged API without compatibility aliases', async
   const v = client();
   assert.equal(Vauth.Version(), require('../package.json').version);
   assert.deepEqual(Object.getOwnPropertyNames(Vauth.prototype).filter(name => name !== 'constructor' && !name.startsWith('_')).sort(),
-    ['Connect', 'LookupSelf', 'Request', 'TokenCacheFile', 'TokenCacheKey', 'VaultURL']);
+    ['Connect', 'LookupSelf', 'Request', 'VaultURL']);
   assert.equal(Vauth.version, undefined);
   assert.equal(v.VaultURL('/auth/token/lookup-self'), v.VAULT_ADDR + '/v1/auth/token/lookup-self');
-  assert.equal(v.TokenCacheFile(), file);
-  assert.equal(path.basename(file), v.TokenCacheKey() + '.creds');
+  assert.equal(v._token_cache_file(), file);
+  assert.equal(path.basename(file), v._token_cache_key() + '.creds');
   const token = await v.Connect();
   assert.equal(token, 'fresh-token');
   assert.equal(await v.Connect(), token);

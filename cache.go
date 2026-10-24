@@ -20,9 +20,9 @@ type tokenCache struct {
 	ExpiresAt     *int64 `json:"expires_at"` // unix milliseconds, null when unlimited
 }
 
-// TokenCacheKey isolates cached tokens by Vault address and authentication
+// tokenCacheKey isolates cached tokens by Vault address and authentication
 // configuration. It matches the Node implementation byte for byte.
-func (v *Vauth) TokenCacheKey() string {
+func (v *Vauth) tokenCacheKey() string {
 	key := `{"vault_addr":` + string(jsonString(strings.Trim(v.VaultAddr, "/")))
 	if auth := v.RC.AuthKey(); auth != "" {
 		key += "," + auth
@@ -31,9 +31,9 @@ func (v *Vauth) TokenCacheKey() string {
 	return hex.EncodeToString(digest[:])
 }
 
-// TokenCacheFile is the armored cache file for this configuration.
-func (v *Vauth) TokenCacheFile() string {
-	return filepath.Join(v.CacheDir, v.TokenCacheKey()+".creds")
+// tokenCacheFile is the armored cache file for this configuration.
+func (v *Vauth) tokenCacheFile() string {
+	return filepath.Join(v.CacheDir, v.tokenCacheKey()+".creds")
 }
 
 func (v *Vauth) agentOptions() *sshagentcrypt.Options {
@@ -44,7 +44,7 @@ func (v *Vauth) readTokenCache() *tokenCache {
 	if !v.TokenCache {
 		return nil
 	}
-	armor, err := os.ReadFile(v.TokenCacheFile())
+	armor, err := os.ReadFile(v.tokenCacheFile())
 	if err != nil {
 		return nil
 	}
@@ -63,7 +63,7 @@ func (v *Vauth) saveTokenCache(token *token) {
 	if !v.TokenCache {
 		return
 	}
-	file := v.TokenCacheFile()
+	file := v.tokenCacheFile()
 	cache := tokenCache{Token: token.Value, LeaseDuration: token.LeaseDuration, Renewable: token.Renewable}
 	if token.TTL != 0 {
 		expires := v.now().UnixMilli() + int64(token.TTL*1000)
