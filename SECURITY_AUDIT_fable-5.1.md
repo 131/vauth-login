@@ -1,204 +1,124 @@
 # Security audit — Codex (Anthropic Claude Fable 5.1)
 
-One of two independent reviews of the design and of the two implementations
-of [vauth-login](README.md), scoring Coolness, Robustness and Safety out of
-20. The other review is in
-[SECURITY_AUDIT_gpt-6.1-sol.md](SECURITY_AUDIT_gpt-6.1-sol.md).
+**Review provenance:** October 24, 2026; an isolated source snapshot matching
+functional commit `b7fba0c`. Temporary `.review-go-modcache` paths and snapshot
+Git metadata in this report are review artifacts, not upstream/package files.
 
-Reviewed: `index.js`, `vauth.go`, `vault.go`, `cache.go`, `rc.go`,
-`cmd/vauth-login`, the Node and Go test suites, `.goreleaser.yaml` and the
-three workflows. `go vet ./...`, `go test -race ./...` (43 tests), `npm test`
-(75 tests, under Node 22 and 24) and `eslint .` pass locally. Behaviour
-claims below were checked in code and, where cheap, by running both CLIs
-against a closed port, with and without a configuration file, with a
-project `.vauthrc` naming a Vault unknown to `~/.vauthrc`, without a
-terminal, and with piped stdin. No real Vault was contacted.
+**Project context (as announced):** upstream `https://github.com/131/vauth-login`, public, ISC license; distributed as npm `vauth-login`, Go module `github.com/131/vauth-login`, and Linux/Windows binaries on GitHub Releases; a public patch release is planned.
 
-## Design, restated
+## 1. Input selection and exclusion statement
 
-One job: produce a `VAULT_TOKEN`. The first `.vauthrc` found (`VAUTHRC`,
-`./.vauthrc`, `~/.vauthrc`) names the Vault and one authentication method,
-`ssh_auth` (Vault ssh plugin: fetch a nonce, have the agent sign it, post
-`public_key`/`nonce`/`signature`) or `jwt_auth`. Only five keys are read
-(`vault_addr`, `ssh_auth`, `jwt_auth`, `token_cache`, `known_vaults`);
-`$${env.X}` macros are expanded inside them.
+Inventory was done by filename first (`git ls-files`, `find`). No `SECURITY_AUDIT*`, advisory, or handoff documents exist in the tree; no excluded content entered this run. Inputs explicitly selected:
 
-Precedence is the inherited `VAULT_TOKEN`, then the disk cache, then a fresh
-login; `--renew` skips straight to login. An inherited token is the caller's:
-it is printed back with `Vauth token: inherited`, never looked up, renewed or
-written to disk, and no request is made. A cached token is trusted until its
-recorded `expires_at`; in the last third of the lease a renewable one is
-renewed, a non-renewable one is replaced. Only 400/403 from renewal fall
-through to login; every other failure propagates.
+- Source: `vauth.go`, `rc.go`, `vault.go`, `cache.go`, `humandiff.go`, `cmd/vauth-login/main.go`, `index.js`, `bin/vauth-login.js`
+- Tests: `vauth_test.go`, `auth_api_test.go`, `cmd/vauth-login/main_test.go`, `test/token-cache.js`
+- Build/release: `go.mod`, `go.sum`, `package.json`, `.goreleaser.yaml`, `.github/workflows/{release,publish-npm,test}.yml`, `.eslintrc`, `.gitignore`
+- Docs: `README.md` (all sections are user documentation; the `## Security` section is a threat-model note, not an audit) and `API_and_tests.md`
+- Dependencies: `.review-go-modcache/github.com/131/ssh-agent-crypt@v1.4.1/*.go`, `golang.org/x/crypto@v0.31.0/ssh/agent/client.go`, `node_modules/{ssh-agent-crypt,nyks/http/request.js}` and installed package versions
+- Excluded: Git history, `REVIEW_SCOPE.json` beyond confirming scope, all Markdown inside dependency caches
 
-A `./.vauthrc` is a project file, like direnv's `.envrc`: the checkout
-chooses the Vault. Before the first request to that Vault (renewal or login),
-its `vault_addr` must be the `vault_addr` or one of the `known_vaults` of
-`~/.vauthrc`; otherwise the user is asked once on the terminal (`Unknown
-vault <addr>, selected by <file>` … `Continue? [y/N]`, default no), and the
-run is refused without a terminal. `--accept` skips that one check, for CI.
-`VAUTHRC` and `~/.vauthrc` are the user's own choice and never ask.
+Working tree: clean (no uncommitted tracked changes). Note: `.review-go-modcache/` (1,146 files) is tracked in this snapshot but is a review artifact not listed in the upstream scope; it must not be published (it would also fail upstream CI's `gofmt -l .`).
 
-The cache is `~/.vauth/tokens/sha256({vault_addr, ssh_auth, jwt_auth}).creds`,
-a JSON `{token, lease_duration, renewable, expires_at}` armored by
-ssh-agent-crypt v3, so the same SSH agent that logs in also guards the
-cache. The token leaves on stdout, raw, without a newline; everything else
-goes to stderr.
+## 2. Scope and method
 
-## What holds
+- Manual review of all first-party Go and Node code, CLI entry points, config loading, Vault transport, cache encryption path, and release pipelines.
+- Review of the cryptographic dependency `ssh-agent-crypt` v1.4.1 (Go) and v1.4.1 (Node) as used by the cache.
+- Local checks run offline (sandbox: no network, no listening sockets): `gofmt -l` on first-party sources (clean), `go vet ./...` (OK), `GOOS=windows go build` (OK), socket-free Go tests `TestCLIProcess`/`TestCLIInformationalFlagsIgnoreConfiguration` (PASS), `eslint .` (clean), `go version -m` on the built binary (deps match `go.sum`).
+- Not run: `go test ./...` / `npm test` integration suites (they spawn `ssh-agent` and a loopback HTTP fixture; `listen` is `EPERM` in this sandbox), `go test -race`, `govulncheck`, `npm audit`, any real Vault or credential access.
 
-- The CLI contract is what a shell wants: `export VAULT_TOKEN=$(vauth-login)`,
-  one status line on stderr (`Vauth token: reused · 11h`), the prompt itself
-  on stderr so a command substitution never captures it.
-- The consent gate is placed where it matters for `login`.
-  `_trust_vault`/`trustVault` runs before the renewal request and before the
-  login request, which is
-  before any nonce is fetched, any agent signature is requested or any
-  `jwt_auth.jwt` is posted. Checked: a project `.vauthrc` with `jwt_auth:
-  {jwt: "$${env.SECRET}"}` pointing at an unknown Vault is refused without
-  a terminal, in both implementations, before any connection attempt. An
-  inherited token short-circuits everything and so needs no consent; with
-  `--renew` the inherited token is ignored and the gate applies again.
-- Only `./.vauthrc` is gated, and only when it names a `vault_addr`. When the
-  current directory is the home directory the file is the user's own and is
-  not gated. `~/.vauthrc` is parsed through the same allow-list, so a
-  hostile `./.vauthrc` cannot vouch for itself.
-- The token never reaches a log line. `HTTPError.Error()` prints the status
-  only; the response body is a non-enumerable property (Node) or a plain
-  field hidden from `Error()` (Go). Debug output (`DEBUG=vauth-login`) names
-  roles and key comments, not tokens. Tests pin this (`CLI errors do not
-  print server response bodies or inherited tokens`).
-- Cache at rest is ciphertext only, written to a `0700` directory as a
-  `0600` file via a unique temporary (`wx` + `randomUUID()` in Node,
-  `os.CreateTemp` in Go) and an atomic rename; the temporary is always
-  removed. A plaintext file in place of the armor is rejected, and a cache
-  failure degrades to "token not persisted" rather than to a failed login.
-  Normal reuse never rewrites the file.
-- The cache key and payload are byte-identical between Node and Go
-  (`TokenCacheKey` reproduces `JSON.stringify` ordering, including YAML
-  document order of `ssh_auth`/`jwt_auth`), so one agent, one file, two
-  readers; cross-implementation fixtures prove it.
-- Transport is strict in both: 60 s deadline covering headers and body,
-  redirects refused (`http.ErrUseLastResponse`; nyks without
-  `followRedirect`), non-200 is an error, system TLS verification on, request
-  options built from a parsed URL (no string concatenation past `/v1/`).
-- Lease arithmetic is defensive: `ttl`/`lease_duration` missing, `null`, or
-  negative are rejected rather than read as "unlimited"; only an explicit
-  `0` means indefinite. Renewal re-baselines `lease_duration`.
-- The Go CLI is strict about its surface: unknown flags, extra positional
-  arguments and unknown commands are refused; `--accept=false` means false.
-- Both suites drive the real CLIs as subprocesses with a fake Vault, a fake
-  agent and a scratch `HOME`, and cover the consent path (known, unknown,
-  `--accept`, no TTY), the inherited token, renewal, expiry and the
-  encrypted cache. The Go suite is race-clean.
+## 3. Findings (prioritized)
 
-## Weaknesses
+Severity reflects impact in the announced public/integrator context. **Verified** = behavior confirmed in code/config; **Hypothesis** = plausible impact that depends on an external component or deployment.
 
-Ordered by what I would fix first.
+### F1 — SSH agent signs an unconstrained, server-chosen challenge, for every key in the agent (Medium–High)
+**Verified:** `vault.go:137-157` fetches `auth/<path>/nonce`, takes `data.nonce` as an arbitrary string, and calls `client.Sign(key, nonce)` for each agent key, moving to the next key on any login failure (`:165-167`). `index.js:257-269` does the same. No length, charset, or structure check is applied, and no domain separation is added before signing.
+**Impact (hypothesis on exploitation):** any Vault origin the client will talk to (a trusted-but-compromised Vault, an attacker-controlled `VAULT_ADDR` in CI, or a MitM on an `http://` address — see F3) becomes a chosen-message signing oracle over all identities loaded in the agent, not just the Vault key. Two concrete consequences: (a) classic SSH impersonation — the attacker returns as "nonce" an SSH userauth request blob for a live session it opened against a third-party server trusting one of the victim's keys; (b) decryption of a stolen `~/.vauth/tokens/*.creds` file — the attacker returns the exact SSHSIG blob `ssh-agent-crypt` derives keys from (`sshagentcrypt.go:257-259`, namespace `ssh-agent-crypt`, sha512(salt)), obtaining the key material without agent access. The loop also discloses every public key in the agent to the server.
+**Fix:** reject nonces that are not a bounded, fixed-alphabet token (e.g., ≤ 128 bytes of base64/hex); never sign raw server bytes — sign a domain-separated hash (e.g., SSHSIG envelope with a `vault-ssh-login` namespace, which would require the auth plugin to verify the same envelope); let `ssh_auth` pin a key (`key: <fingerprint|comment>`) and use only that key by default instead of iterating all agent keys.
 
-1. **Node exits 0 with an empty token when it cannot authenticate.** With
-   no `.vauthrc` at all, with `vault_addr` only, or with `ssh_auth` but no
-   `SSH_AUTH_SOCK` on Linux, `connect()` returns `undefined`, cnyks renders
-   nothing, and the process exits 0 with an empty stdout *and* an empty
-   stderr. `export VAULT_TOKEN=$(vauth-login)` silently sets an empty
-   variable and the next tool fails far away from the cause. Go, in the
-   same three cases, prints `Could not login to vault: no authentication
-   method available` and exits 1. Node only throws when `--renew` is given
-   or when a cached token existed. The fix is one line in the CLI path:
-   refuse to produce "no token" with a zero exit, as Go's `run()` does.
-2. **The Node CLI exposes ungated commands.** cnyks publishes every public
-   method as a command, so `vauth-login --help` lists `lookupSelf [$token]`
-   and `request $method, $apiPath, [$token, …]` next to `login`. Neither
-   calls `_trust_vault`: checked, `VAULT_TOKEN=tok vauth-login lookupSelf`
-   in a directory whose `.vauthrc` names a Vault unknown to `~/.vauthrc`
-   connects to it and sends the token, without a terminal and without a
-   prompt; `request` lets a script hit any path with it. Go's CLI accepts
-   only `login`/`connect`/`version`/`help`. Mark the two methods
-   `@interactive_runner hide`, or better, move the gate into `request()`
-   so the SDK is covered too (the inherited-token fast path makes no
-   request and stays offline).
-3. **The two consent bypasses re-open the project-file problem.** By
-   design a `./.vauthrc` can pick `vault_addr`, `ssh_auth.path`/`role` and
-   `jwt_auth.jwt: "$${env.ANYTHING}"`. The prompt closes this for a human
-   at a terminal; `--accept` and `VAUTHRC` do not. A CI job that runs
-   `vauth-login --accept` on a freshly cloned repository will post any
-   environment variable the repository names to any server it names, and
-   will sign server-chosen bytes with every key its agent holds, with no
-   output but `Vauth token: generated`. The README's `--accept` example
-   does not say "only on checkouts you trust". Mitigations, in order of
-   cost: document it; have `--accept` still require that the project's
-   `vault_addr` equals `VAULT_ADDR` from the environment when that is set
-   (CI usually sets it); refuse `$${env.*}` in `jwt` outside an explicit
-   allow-list; and have the prompt list what is about to be sent (the
-   expanded environment variable *names*, the role, the number of agent
-   keys), not only the address.
-4. **Cached tokens are trusted until `expires_at`.** No `lookup-self` is
-   made on the cache path, so a revoked token is served (the test says so:
-   `cached tokens are reused without checking revocation`) and a token with
-   `ttl: 0` is cached with `expires_at: null`, i.e. forever. The caller
-   discovers revocation only from the first Vault 403 downstream. One
-   lookup per process is cheap next to a signature prompt; a time-based
-   re-check (e.g. once per hour, recorded in the cache) would preserve the
-   offline-ish ergonomics.
-5. **The Node CLI surface is loose.** cnyks accepts any flag: `vauth-login
-   --foo` runs normally, and `--accept=false` is the string `"false"`,
-   which is truthy, so it *accepts*. A typo in a CI script (`--acept`) is
-   silent in Node and an error in Go; `--renew=false` forces a login for
-   the same reason. Validate the flag dictionary in the
-   `module.parent === null` shim (only `renew`, `accept`, `help`,
-   `version`, `ir://*`) and coerce booleans before handing over to cnyks.
-6. **Terminal detection differs.** Go uses `ModeCharDevice`, which is true
-   for `/dev/null`, so `vauth-login </dev/null` prints the full prompt,
-   reads EOF and then says `refused`; Node uses `isTTY` and prints the
-   one-line refusal with the `known_vaults` hint. Same outcome, different
-   stderr, and the Go check would also accept a serial device or a pty
-   driven by a script. `golang.org/x/term.IsTerminal` is the right test.
-7. **Every agent key is offered, and the signature is raw.** `loginVaultSSH`
-   iterates the whole identity list, fetching a nonce and requesting a
-   signature per key until one role matches; a user with several keys gets
-   several prompts (`ssh-add -c`) or none (Pageant, Windows OpenSSH agent),
-   and discloses every public key to the server. The signature is
-   `agent.sign`/`client.Sign` over the nonce bytes without an SSHSIG
-   namespace; the nonce is a JSON string so an accepted server cannot make
-   the agent sign an ssh-agent-crypt blob or a session id, which limits
-   this to a signature-collection oracle on Vaults the user has vouched
-   for. A `key`/fingerprint selector in `ssh_auth` would reduce both the
-   prompts and the disclosure.
-8. **`known_vaults` matching is textual.** Addresses are compared after
-   trimming `/` only: `HTTP://`, an explicit `:443`, or a different case in
-   the host are "unknown". The failure mode is a spurious prompt, never a
-   spurious trust, so this is ergonomics; still, normalising scheme and
-   host case through the URL parser both sides already use is cheap.
-9. **Release pipeline is reproducible only by convention.**
-   `package-lock.json` is git-ignored and both workflows run `npm install`,
-   so the Node tree that is tested and the one that is published are
-   whatever the registry served that minute; `cnyks`/`nyks`/`ssh2` are
-   caret ranges. Actions are tag-pinned (`@v4`, `@v5`, `@v6`), and the
-   Windows signing hook executes `131/gh-actions@v1`, a mutable ref, with
-   the release token in scope. Go tests run on Linux only (Windows is a
-   build check), so Pageant/OpenSSH pipe discovery and the Windows home
-   directory are never exercised in CI. CI uses Node 24 while
-   `package.json` declares no `engines`.
-10. **Minor hygiene.** Node still throws strings (`throw 'Could not login to
-   vault'`), relies on `module.parent`, and lets cnyks print the stack trace
-   twice on stderr (paths, no secrets) where Go prints one line; `400` is
-   treated as "invalid token" although Vault also returns it for malformed
-   requests, so a bug on our side would be masked by a new login; the
-   project-manifest version pin reads `./package.json` from the current
-   directory, one more cwd-controlled input (denial-of-service only); the
-   expanded `jwt` is part of the cache-key hash, so a rotated JWT leaves
-   the previous `.creds` behind (encrypted, but never cleaned).
+### F2 — Release and publish pipelines depend on mutable refs, unpinned installs and an EOL toolchain (Medium)
+**Verified:**
+- `.github/workflows/release.yml:22-26` checks out `131/gh-actions@v1` (mutable branch/tag) and `.goreleaser.yaml:19` executes `.gh-actions/sign-binaries/sign` from it with `SIGNING_SERVER`; `actions/*` and `goreleaser-action` are major-tag pinned, not SHA pinned.
+- `publish-npm.yml:23`, `test.yml:18` use `npm install` and `package-lock.json` is gitignored (`.gitignore:1`), so every CI run resolves fresh transitive versions.
+- `go.mod:5` declares `go 1.22` with no `toolchain` line; `setup-go` with `go-version-file` therefore builds release binaries with Go 1.22.x, unsupported since Feb 2025 — stdlib (`net/http`, `crypto/tls`) fixes after that date are absent from shipped binaries. `golang.org/x/crypto v0.31.0` is also well behind (`ssh` package fixes since; the known post-0.31 ssh CVE is server-side, so low direct impact here).
+**Impact:** an actor with write access to `131/gh-actions` can alter the signing step for all Windows releases; a compromised transitive npm release enters CI and the publish job immediately; binaries ship with an unpatched runtime.
+**Fix:** pin third-party actions and the `gh-actions` checkout by commit SHA; commit `package-lock.json` and use `npm ci`; bump `go`/`toolchain` to a supported line (1.24+/1.25) and update `x/crypto`; consider `actions/attest-build-provenance` or cosign for Linux binaries and `SHA256SUMS` (currently only Windows is signed).
 
-## Scores
+### F3 — Plaintext `http://` Vault addresses are accepted silently (Medium)
+**Verified:** no scheme validation in `vauth.go:150-153`, `vault.go:43-45`, `index.js:79,300-313`. The client sends `X-Vault-Token`, JWTs and SSH signatures over whatever scheme `vault_addr`/`VAULT_ADDR` specifies.
+**Impact:** on `http://`, a network attacker reads bearer tokens/JWTs and can act as the oracle in F1.
+**Fix:** require `https://` except for loopback hosts, or demand an explicit `allow_insecure: true` in `~/.vauthrc`.
 
-| Criterion | Score / 20 | Justification |
-| --- | ---: | --- |
-| ✨ Coolness | 17 | A one-line `export VAULT_TOKEN=$(vauth-login)` that is the same from a Node package, a Go module or a signed `.exe`, sharing one encrypted cache that either implementation can read, with the SSH agent as the single root of trust for both login and cache, and a direnv-style consent gate that names the Vault and tells the user how to stop being asked. Reuse of ssh-agent-crypt, nyks and cnyks keeps the code small and legible. Deducted for the loose Node flag handling and the prompt saying *where* but not *what* will be sent. |
-| Robustness | 15 | 75 Node and 43 Go tests that drive the real CLIs, a race-clean Go suite, cross-implementation cache fixtures, strict lease parsing, deadlines, refused redirects and atomic cache writes. Deducted for Node exiting 0 with an empty token and an empty stderr, the silently accepted unknown flags, the lockfile-free CI and the absence of Windows runtime tests. |
-| Safety | 14 | Tokens are never logged, rest encrypted under the user's own SSH key with authenticated armor, inherited tokens are never persisted, a project file cannot make `login` reach the network without the user vouching for its Vault, and the trust decisions (400/403 only, no redirects) are the right ones. Deducted for the ungated `lookupSelf`/`request` commands of the Node CLI, for `--accept`/`VAUTHRC` re-opening the env-exfiltration and signing oracle on hostile checkouts, and for revocation never being re-checked while a cache is valid. Not a security certification. |
+### F4 — `publish-npm.yml` trigger filter is ineffective and the job lacks environment protection (Medium)
+**Verified:** `publish-npm.yml:3-5` uses `on: create` with a `tags:` filter; GitHub only supports branch/tag filters on `push`/`pull_request*`, so the workflow runs on every branch *and* tag creation, with `id-token: write`, no `environment:` (unlike `release.yml:13`), and no check that the tag equals `package.json` version.
+**Impact (hypothesis):** a branch created after a version bump publishes to npm before review/tag; version skew between npm (`package.json`) and binaries (`{{ .Tag }}`) is possible.
+**Fix:** `on: push: tags: ['v*']`, add `environment: production`, and assert `v$(node -p require('./package.json').version) == $GITHUB_REF_NAME` before `npm publish`.
 
-**Release recommendation:** no blocker for interactive use of `login`. Hide
-or gate `lookupSelf`/`request` in the Node CLI first; before relying on
-`--accept` in CI, read weakness 3 and pin `VAULT_ADDR` in the job; before
-wiring vauth-login as the login step of a broader tool, align the Node CLI
-with Go's non-zero exit when no token is produced.
+### F5 — Environment-based trust (`VAUTHRC`, `VAULT_ADDR`) can be set by the project being authenticated (Medium, design)
+**Verified:** `rc.go:247-258` takes `VAUTHRC` as first candidate and skips the known-vault gate for it (`vauth.go:140`); `rc.go:265` and `index.js:87` accept `VAULT_ADDR` as proof of trust. The README (`:97-98`) declares the environment operator-controlled, yet the tool is designed to be a project dependency (`CheckProjectVersion`, `vauth.go:63-93`).
+**Impact (hypothesis):** when invoked from project-controlled scripts (`package.json` scripts, direnv, Makefiles), a malicious repository sets `VAUTHRC=…` or `VAULT_ADDR=https://attacker` plus a matching `.vauthrc`, bypassing the allowlist; combined with `$${env.X}` macro expansion (`rc.go:130-155`), arbitrary environment variables (e.g., `jwt: $${env.GITHUB_TOKEN}`) are posted to the attacker, and F1 applies.
+**Fix:** document this limitation prominently; optionally treat `VAULT_ADDR`-only trust as insufficient when `./.vauthrc` was selected and `~/.vauthrc` exists (require `known_vaults`), and restrict macro expansion for project files to an allowlist of variable names.
+
+### F6 — RSA signatures requested with default flags (SHA-1 `ssh-rsa`) (Low)
+**Verified:** `vault.go:153` uses `client.Sign` → `SignWithFlags(..., 0)` (`x/crypto ssh/agent/client.go:439-441`); `index.js:262` passes `{}` flags. `ssh-agent-crypt` itself requests `rsa-sha2-512` (`sshagentcrypt.go:121-127`).
+**Fix:** request `SignatureFlagRsaSha512` for RSA keys (plugin must accept `rsa-sha2-512`).
+
+### F7 — Unvalidated `path` in `ssh_auth`/`jwt_auth` reaches the request URL (Low)
+**Verified:** `vault.go:110,137` and `index.js:257,293` interpolate `path` unescaped (`auth/<path>/login`); Go sends `..` segments verbatim, Node normalizes them. A project file can thus target any unauthenticated path on the trusted Vault with the login payload.
+**Fix:** validate `path` against `^[A-Za-z0-9_./-]+$` and reject `..`/empty segments.
+
+### F8 — `go test ./...` in `publish-npm.yml` runs after `npm install` and traverses `node_modules` (Low)
+**Verified locally:** `go list ./...` enumerates `github.com/131/vauth-login/node_modules/flatted/golang/pkg/flatted`. Any npm dependency shipping Go test files would be compiled/executed by the publish job, and unrelated Go breakage in `node_modules` can block publishing.
+**Fix:** run Go steps before `npm install`, or `go test $(go list ./... | grep -v /node_modules/)`.
+
+### F9 — Dead, outdated dev dependencies (Low)
+**Verified:** `package.json:28-29` lists `mocha ^3.1.2` (installed 3.5.3, 2017) and `nyc`, `expect.js`, while tests use `node --test`; `mocha@3` drags `growl@1.9.2` (known command-injection advisory), `diff@3.2.0`, `json3`, legacy `lodash.*` into every CI install (with lifecycle scripts enabled). `eslint@8` is EOL.
+**Fix:** remove `mocha`, `nyc`, `expect.js`; move to ESLint 9 or pin and plan.
+
+### F10 — No vulnerability disclosure policy or dependency-update automation (Low)
+**Verified:** no `SECURITY.md`, `.github/dependabot.yml`, or CODEOWNERS in the tree. For a public release with integrators this leaves no reporting path.
+**Fix:** add `SECURITY.md` (contact, supported versions, PGP/private advisory via GitHub) and Dependabot for `gomod`, `npm`, `github-actions`.
+
+### Informational
+- Response bodies are read without a size cap (`vault.go:73`, `index.js:315`): memory pressure from a hostile server only.
+- Cache filename is `sha256(JSON including the raw JWT)` (`cache.go:26-31`, `index.js:110-112`): a credential-derived identifier on disk; not reversible in practice, but surprising.
+- `MkdirAll(…, 0o700)` does not tighten pre-existing `~/.vauth` permissions; file mode is not enforced on Windows (ACL inheritance).
+- `ssh-agent-crypt` still decrypts legacy v1/v2 armor without authenticated prefix (`sshagentcrypt.go:341-344`); vauth-login writes only v3.
+- `go.mod:3` comment `// version: 1.0.0` is stale relative to `package.json` 1.1.1.
+
+## 4. Strengths
+
+- Clear, documented trust model: inherited tokens never touched, project-selected Vaults gated by `~/.vauthrc`/`known_vaults`, no interactive prompt (`vauth.go:139-142`, `index.js:82-89`).
+- Cache is encrypted and authenticated (v3, HMAC-SHA256 over header+payload, constant-time compare), written `0600` via temp file + atomic rename, directory `0700`; plaintext caches are rejected (tests `TestPlaintextCacheNotAccepted`, `TestCacheIsArmorOnly`).
+- Redirects disabled in both transports (`vault.go:85`; nyks `followRedirect` unset), 60 s timeouts, `HTTPError` hides bodies from logs while keeping them for SDK callers.
+- Strict CLI surface; `--help/--version` never load config or credentials; token is the only stdout output.
+- Byte-identical cache key/format between Node and Go with cross-implementation tests; fixtures use throwaway agents and loopback fake Vaults (no real credentials).
+- Release: `-trimpath -s -w`, `SHA256SUMS`, Authenticode for Windows, `environment: production`, `contents: read` on test workflow, npm trusted publishing (OIDC) instead of a long-lived token; `files` allowlist keeps tests/workflows out of the npm tarball.
+
+## 5. Limitations of this review
+
+- Integration test suites could not be executed in this sandbox (no sockets); results in `API_and_tests.md` were not independently reproduced.
+- No network: `govulncheck`, `npm audit`, GitHub repository settings (tag protection, environment reviewers, branch protection) and the `131/gh-actions` signing script were not inspected.
+- The Vault SSH auth plugin's nonce format and signature verification rules are unknown; F1/F6 exploitation depends on it.
+- Windows Pageant/named-pipe behavior reviewed from source only.
+
+## 6. Scores
+
+| Dimension | Score | Justification |
+|---|---|---|
+| **Coolness** | 15/20 | Elegant idea (agent-sealed, implementation-interoperable token cache; prompt-free allowlisting), tight CLI contract, dual Node/Go parity with shared tests. Loses points for the all-keys signing loop and version/tooling drift. |
+| **Robustness** | 12/20 | Thorough behavioral tests and defensive parsing, but CI is non-reproducible (no lockfile, `npm install`), the publish trigger is misconfigured, Go toolchain is EOL, `node_modules` leaks into `go test`, and dead dev deps bloat installs. |
+| **Safety** | 13/20 | Strong storage and transport hygiene and a sensible trust model, offset by the unconstrained signing oracle (F1), silent plaintext HTTP (F3), environment-trust bypass in the dependency use case (F5), and supply-chain exposure in the signing path (F2). |
+
+*No repository files were modified, nothing was published or deployed, and no real credentials or Vault services were accessed during this analysis.*
+
+
+## Release verification (coordinator, separate from the assessment)
+
+The reviewed functional source matches commit `b7fba0c`. Independent review
+sandboxes restricted network/listening sockets. The coordinator separately
+passed all 80 Node tests on Node 24, ESLint, `go vet ./...`, `go test -race ./...`,
+and a Windows cross-build. Node/Go CLI outputs matched byte-for-byte for nine
+normal, informational, and invalid-argument cases. These checks do not change
+the assessment's findings or scores. Release version markers are subsequently
+aligned by `ppackage version patch`; the assessments precede that metadata-only
+versioning step.

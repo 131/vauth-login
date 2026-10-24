@@ -53,24 +53,24 @@ Force a fresh login:
 vauth-login --renew
 ```
 
-In CI, trust the Vault selected by the project's `./.vauthrc` without the
-confirmation described under Configuration:
+In CI, supply the trusted Vault address through the environment. Only a
+matching project address skips the confirmation described under Configuration:
 
 ```bash
-export VAULT_TOKEN=$(vauth-login --accept)
+export VAULT_ADDR=https://vault.example.test
+export VAULT_TOKEN=$(vauth-login)
 ```
 
-Check the version or show help:
+The Node executable is `bin/vauth-login.js`; Node and Go share this CLI:
 
-```bash
-vauth-login version
-vauth-login --help
+```text
+vauth-login [--renew] [--version] [--help]
 ```
 
-`login` and `connect` are optional aliases for the default operation. The Node
-library returns the token; cnyks writes that result with `--ir://raw`. Its help
-prints the generated command list on stderr, and `--ir://run=version` selects
-the version method directly.
+`--version` prints the package/release version and `--help` prints usage, both
+without loading project configuration or credentials. All other arguments,
+aliases, and `--flag=value` forms are rejected. SDK helpers are not CLI commands.
+An unavailable token is an error (exit 1).
 
 ## Configuration
 
@@ -90,13 +90,13 @@ token_cache: true
 Configuration keys: `vault_addr`, `ssh_auth`, `jwt_auth`, `token_cache`, and
 `known_vaults`.
 
-A `./.vauthrc` belongs to the project; `~/.vauthrc` belongs to the user. Before
-the first request to a Vault selected by a project file, the user must vouch
-for that address: either it is the `vault_addr` of `~/.vauthrc`, or it is
-listed in its `known_vaults`. Otherwise `vauth-login` asks `Continue? [y/N]`
-once on the terminal, and refuses without one. `VAUTHRC` and `~/.vauthrc`
-never ask; `--accept` never asks either (CI). Reusing a valid cached token
-makes no request and asks nothing.
+A `./.vauthrc` belongs to the project; `~/.vauthrc` belongs to the user. Login
+or renewal to a project-selected Vault is allowed only when it is the
+`vault_addr` of `~/.vauthrc`, appears in its `known_vaults`, or matches environment
+`VAULT_ADDR`. Otherwise the operation fails without a prompt. The environment
+address is trusted in memory, without rewriting `~/.vauthrc`. Explicit
+`VAUTHRC` and home configuration are operator-controlled. Reusing an inherited
+or valid cached token is offline and does not require this address check.
 
 ```yaml
 # ~/.vauthrc
@@ -144,24 +144,39 @@ Node module, Go module, token lifecycle, Vault HTTP transport and the test matri
 
 ## Security audit
 
-Two independent reviews of the design and of the two implementations, each
-scoring Coolness, Robustness and Safety out of 20:
+Two independently produced assessments cover the functional source in commit
+`b7fba0c`, before the metadata-only patch versioning step:
 [SECURITY_AUDIT_fable-5.1.md](SECURITY_AUDIT_fable-5.1.md) and
 [SECURITY_AUDIT_gpt-6.1-sol.md](SECURITY_AUDIT_gpt-6.1-sol.md).
 
 | Criterion | Codex (Claude Fable 5.1) | Codex (GPT 6.1) |
 | --- | ---: | ---: |
-| ✨ **Coolness** | 17/20 | 17/20 |
-| Robustness | 15/20 | 12/20 |
-| Safety | 14/20 | 12/20 |
+| ✨ **Coolness** | 15/20 | 17/20 |
+| Robustness | 12/20 | 13/20 |
+| Safety | 13/20 | 12/20 |
 
-Both reviews converge on the same items: the Node CLI exiting 0 with an
-empty token when no authentication method is available, the Node CLI
-exposing `lookupSelf`/`request` outside the `known_vaults` consent gate and
-accepting any flag (`--accept=false` counts as accept), `--accept` delegating
-more than the prompt explains, cached tokens trusted until expiry without a
-revocation check, and a lockfile-free release pipeline. Scores are opinions,
-not a certification. Both reviews describe the current tree (v1.1.1).
+Claude's prompt explicitly announced the public ISC upstream, npm/Go/native
+release channels, and upcoming exposure to external users. The retained GPT
+assessment was completed independently on exactly the same source before that
+prompt refinement. Later GPT attempts, including a second pass with existing
+reports present but excluded from reading, were blocked without a final report.
+Their missing outcomes are not replaced by invented findings or scores.
+The reports retain their respective context and conclusions; they were not
+rewritten to agree.
+
+Both identify transport and release reproducibility risks. Claude emphasizes
+server-provided SSH signing inputs, environment/configuration trust boundaries,
+and signing-pipeline exposure. GPT emphasizes plaintext HTTP, unchecked YAML
+traversal, and unbounded HTTP response buffering. Verified source-level findings,
+conditional risks, and unverified external behavior are distinguished in the
+individual reports. Scores are subjective assessments, not certification or a
+complete current vulnerability-database clearance.
+
+Prior reports and embedded score summaries were excluded from the completed
+independent runs. Separate coordinator checks passed all 80 Node tests on
+Node 24, ESLint, Go vet/race tests, Windows compilation, and Node/Go CLI output
+comparisons. Review-only module-cache copies are not part of this repository
+or its published package.
 
 ## Credits
 
