@@ -2,6 +2,7 @@ package vauthlogin
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -64,7 +65,7 @@ func TestTransportRejectsRedirect(t *testing.T) {
 		w.Write([]byte("secret-server-response"))
 	}))
 	defer redirect.Close()
-	v := &Vauth{VaultAddr: redirect.URL}
+	v := &Vauth{vaultAddr: redirect.URL}
 	_, _, err := v.Request("GET", "redirect", "secret-token", nil, 200)
 	var failure *HTTPError
 	if !errors.As(err, &failure) {
@@ -88,7 +89,7 @@ func TestConnectReturnsToken(t *testing.T) {
 		t.Fatal(err)
 	}
 	equal(t, token, "fresh-token")
-	equal(t, v.VaultToken, token)
+	equal(t, v.vaultToken, token)
 	equal(t, status.String(), "Vauth token: generated · 1d\n")
 }
 
@@ -119,7 +120,7 @@ func TestLoginLeaseMustBeExplicit(t *testing.T) {
 func TestLookupTTLRequired(t *testing.T) {
 	for _, body := range []string{`{"data":{}}`, `{"data":{"ttl":null}}`, `{"data":{"ttl":-1}}`} {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(body)) }))
-		v := &Vauth{VaultAddr: server.URL}
+		v := &Vauth{vaultAddr: server.URL}
 		_, err := v.LookupSelf("token")
 		server.Close()
 		if err == nil {
@@ -134,14 +135,14 @@ func TestUnrelatedEncryptionConfigIgnored(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := (&Vauth{RC: *baseline, VaultAddr: baseline.VaultAddr}).tokenCacheKey()
+	expected := (&Vauth{rc: *baseline, vaultAddr: baseline.VaultAddr}).tokenCacheKey()
 	for _, value := range []string{"null", "not-a-mapping", "[ignored, '$${env.MISSING}']", "{path: missing-file, identity: ignored}"} {
 		rc, err := ParseRC([]byte(body+"ssh-agent-crypt: "+value+"\n"), ".vauthrc", nil)
 		if err != nil {
 			t.Fatal(err)
 		}
 		equal(t, rc.AuthKey(), baseline.AuthKey())
-		equal(t, (&Vauth{RC: *rc, VaultAddr: rc.VaultAddr}).tokenCacheKey(), expected)
+		equal(t, (&Vauth{rc: *rc, vaultAddr: rc.VaultAddr}).tokenCacheKey(), expected)
 	}
 }
 
@@ -159,9 +160,9 @@ func TestNewRequiresUserHome(t *testing.T) {
 func TestPublicTransportRejectsUnknownVaultAfterInheritance(t *testing.T) {
 	f := newFixture(t, fixtureOptions{})
 	v := f.client()
-	v.VaultToken = "inherited-token"
+	v.vaultToken = "inherited-token"
 	v.unknownVault = true
-	v.RCFile = "/project/.vauthrc"
+	v.rcFile = "/project/.vauthrc"
 	var stderr bytes.Buffer
 	v.Stderr = &stderr
 	token, err := v.Connect(false)
@@ -202,4 +203,65 @@ func TestPublicTransportRejectsUnknownVaultAfterInheritance(t *testing.T) {
 	check(err)
 	equal(t, len(f.requests), 0)
 	equal(t, stderr.String(), "Vauth token: inherited\n")
+}
+
+func TestReadOnlyCompleteRCSnapshotAndEffectiveGetters(t *testing.T) {
+	home := t.TempDir()
+	file := filepath.Join(home, ".vauthrc")
+	if err := os.WriteFile(file, []byte(`{"env":{"map":{"KEY":"original"}},"extra":[{"nested":true}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("VAUTHRC", file)
+	t.Setenv("VAULT_ADDR", "https://vault.example.test")
+	t.Setenv("VAULT_TOKEN", "inherited-token")
+	v, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, v.VAULT_ADDR(), "https://vault.example.test")
+	equal(t, v.VAULT_TOKEN(), "inherited-token")
+	if _, ok := v.RC()["vault_addr"]; ok {
+		t.Fatal("environment fallback leaked into file configuration")
+	}
+	view := v.RC()
+	view["env"].(map[string]any)["map"].(map[string]any)["KEY"] = "changed"
+	equal(t, v.RC()["env"].(map[string]any)["map"].(map[string]any)["KEY"], "original")
+}
+
+func TestFileSnapshotKeepsAllSectionsAndLiveToken(t *testing.T) {
+	f := newFixture(t, fixtureOptions{})
+	home := t.TempDir()
+	file := filepath.Join(home, ".vauthrc")
+	body := `vault_addr: ` + f.server.URL + `
+jwt_auth: {jwt: fixture-jwt, role: '$${env.ROLE}'}
+env: {map: {WHO: '$${profile.WHO}'}}
+extra: [one, two]
+`
+	if err := os.WriteFile(file, []byte(body), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("VAUTHRC", file)
+	t.Setenv("ROLE", "actual-role")
+	t.Setenv("VAULT_TOKEN", "")
+	v, err := New()
+	if err == nil {
+		v.TokenCache = false
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(file); err != nil {
+		t.Fatal(err)
+	}
+	equal(t, v.RC()["jwt_auth"].(map[string]any)["role"], "$${env.ROLE}")
+	equal(t, v.RC()["env"].(map[string]any)["map"].(map[string]any)["WHO"], "$${profile.WHO}")
+	token, err := v.Connect(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, token, "fresh-token")
+	equal(t, v.VAULT_TOKEN(), token)
+	var payload map[string]any
+	json.Unmarshal([]byte(f.requests[0].Body), &payload)
+	equal(t, payload["role"], "actual-role")
 }

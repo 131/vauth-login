@@ -13,7 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// RC is the parsed .vauthrc, after $${env.X} expansion.
+// RC is the private authentication view, with the complete JSON snapshot retained.
 type RC struct {
 	VaultAddr  string   `yaml:"vault_addr"`
 	SSHAuth    *SSHAuth `yaml:"ssh_auth"`
@@ -25,7 +25,8 @@ type RC struct {
 
 	// authKey is the JSON of {ssh_auth, jwt_auth} in document order, as
 	// JSON.stringify would render them: it isolates the token cache.
-	authKey string
+	authKey  string
+	document []byte
 }
 
 // AuthKey renders ssh_auth and jwt_auth as JSON members, in the order of the
@@ -282,7 +283,7 @@ func KnownVault(addr, home string, environ map[string]string) bool {
 }
 
 // ParseRC parses a .vauthrc body and expands its $${env.X} macros against
-// environ. All other configuration sections are ignored.
+// environ for the private authentication view; the complete JSON document is retained.
 func ParseRC(body []byte, file string, environ map[string]string) (*RC, error) {
 	var document yaml.Node
 	if err := yaml.Unmarshal(body, &document); err != nil {
@@ -295,6 +296,14 @@ func ParseRC(body []byte, file string, environ map[string]string) (*RC, error) {
 	if root.Kind != yaml.MappingNode {
 		return nil, fmt.Errorf("Could not parse %s: expected a mapping", file)
 	}
+	var complete map[string]any
+	if err := document.Decode(&complete); err != nil {
+		return nil, fmt.Errorf("Could not parse %s: %w", file, err)
+	}
+	jsonDocument, err := json.Marshal(complete)
+	if err != nil {
+		return nil, fmt.Errorf("Could not represent %s as JSON: %w", file, err)
+	}
 	var content []*yaml.Node
 	for i := 0; i+1 < len(root.Content); i += 2 {
 		switch root.Content[i].Value {
@@ -306,7 +315,7 @@ func ParseRC(body []byte, file string, environ map[string]string) (*RC, error) {
 	walk(&document, func(value string) string {
 		return ReplaceEnv(value, Lookup{"env": environ})
 	})
-	rc := RC{}
+	rc := RC{document: jsonDocument}
 	if err := document.Decode(&rc); err != nil {
 		return nil, fmt.Errorf("Could not parse %s: %w", file, err)
 	}

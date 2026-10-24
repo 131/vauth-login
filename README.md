@@ -144,6 +144,10 @@ Node module, Go module, token lifecycle, Vault HTTP transport and the test matri
 [API_and_tests.md](API_and_tests.md).
 
 The prototype client API is `Connect`, `LookupSelf`, `Request` in Node and Go.
+Read-only `RC`, `VAULT_ADDR` and `VAULT_TOKEN` readers expose the complete parsed
+configuration, effective address and current token. The file path and authentication
+state remain internal; embedding code can read the document without reopening
+its file.
 Old Node method spellings and exported cache/URL helpers are removed, without
 compatibility aliases; update SDK callers accordingly. The standalone CLI
 contract remains unchanged.

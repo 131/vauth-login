@@ -34,7 +34,7 @@ type auth struct {
 
 // vaultURL returns an API URL relative to this configured Vault.
 func (v *Vauth) vaultURL(path string) string {
-	return strings.TrimRight(v.VaultAddr, "/") + "/v1/" + strings.TrimLeft(path, "/")
+	return strings.TrimRight(v.vaultAddr, "/") + "/v1/" + strings.TrimLeft(path, "/")
 }
 
 // Request performs a Vault API call after checking destination trust.
@@ -42,7 +42,7 @@ func (v *Vauth) vaultURL(path string) string {
 // With expect > 0, another status is returned as *HTTPError.
 func (v *Vauth) Request(method, path, token string, payload any, expect int) (int, []byte, error) {
 	if v.unknownVault {
-		return 0, nil, fmt.Errorf("Unknown vault %s, selected by %s. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.", strings.Trim(v.VaultAddr, "/"), v.RCFile)
+		return 0, nil, fmt.Errorf("Unknown vault %s, selected by %s. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.", strings.Trim(v.vaultAddr, "/"), v.rcFile)
 	}
 	var body io.Reader
 	if payload != nil {

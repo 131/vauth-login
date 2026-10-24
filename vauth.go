@@ -27,11 +27,11 @@ const PackageName = "vauth-login"
 var Version string
 
 // Vauth is a configured client. New builds one from the process environment;
-// fields may be set directly for programmatic use.
+// authentication data and the selected file path are private.
 type Vauth struct {
-	RC         RC
-	VaultAddr  string
-	VaultToken string
+	rc         RC
+	vaultAddr  string
+	vaultToken string
 	// Agent is the ssh-agent address; empty disables ssh authentication.
 	Agent string
 	// TokenCache enables the on-disk token cache in CacheDir.
@@ -45,12 +45,27 @@ type Vauth struct {
 	HTTPClient *http.Client
 	// Now overrides the clock (tests).
 	Now func() time.Time
-	// RCFile is the configuration file New selected, if any.
-	RCFile string
+	// rcFile is the configuration file New selected, if any.
+	rcFile string
 
 	connected    bool
 	unknownVault bool
 }
+
+// RC returns an independent snapshot of the complete parsed document.
+func (v *Vauth) RC() map[string]any {
+	document := map[string]any{}
+	if len(v.rc.document) != 0 {
+		json.Unmarshal(v.rc.document, &document)
+	}
+	return document
+}
+
+// VAULT_ADDR returns the effective address, including the environment fallback.
+func (v *Vauth) VAULT_ADDR() string { return v.vaultAddr }
+
+// VAULT_TOKEN returns the current token; Connect owns changes to it.
+func (v *Vauth) VAULT_TOKEN() string { return v.vaultToken }
 
 // token is an established token with its remaining validity.
 type token struct {
@@ -134,24 +149,24 @@ func New() (*Vauth, error) {
 		if err != nil {
 			return nil, err
 		}
-		v.RC = *rc
-		v.RCFile = file
+		v.rc = *rc
+		v.rcFile = file
 		// A project's ./.vauthrc chooses the Vault; the user vouches for it in ~/.vauthrc.
 		if file == filepath.Join(cwd, ".vauthrc") && file != filepath.Join(home, ".vauthrc") && rc.VaultAddr != "" {
 			v.unknownVault = !KnownVault(rc.VaultAddr, home, environ)
 		}
 	}
-	if v.RC.TokenCache != nil && !*v.RC.TokenCache {
+	if v.rc.TokenCache != nil && !*v.rc.TokenCache {
 		v.TokenCache = false
 	}
 	if v.Agent == "" {
 		v.TokenCache = false
 	}
-	v.VaultAddr = v.RC.VaultAddr
-	if v.VaultAddr == "" {
-		v.VaultAddr = environ["VAULT_ADDR"]
+	v.vaultAddr = v.rc.VaultAddr
+	if v.vaultAddr == "" {
+		v.vaultAddr = environ["VAULT_ADDR"]
 	}
-	v.VaultToken = environ["VAULT_TOKEN"]
+	v.vaultToken = environ["VAULT_TOKEN"]
 	return v, nil
 }
 
@@ -189,16 +204,16 @@ func (v *Vauth) tokenStatus(operation string, token *token) {
 // method, no token is used.
 func (v *Vauth) Connect(renew bool) (string, error) {
 	if v.connected && !renew {
-		return v.VaultToken, nil
+		return v.vaultToken, nil
 	}
 	// An inherited token is the caller's: never looked up, renewed or persisted.
-	if v.VaultToken != "" && !renew {
+	if v.vaultToken != "" && !renew {
 		fmt.Fprintln(v.stderr(), "Vauth token: inherited")
 		v.connected = true
-		return v.VaultToken, nil
+		return v.vaultToken, nil
 	}
-	if v.RC.SSHAuth == nil && v.RC.JWTAuth == nil {
-		v.VaultToken = ""
+	if v.rc.SSHAuth == nil && v.rc.JWTAuth == nil {
+		v.vaultToken = ""
 		return "", nil
 	}
 	v.connected = false
@@ -238,14 +253,14 @@ func (v *Vauth) Connect(renew bool) (string, error) {
 	if established == nil {
 		var granted *auth
 		var err error
-		if v.RC.SSHAuth != nil && v.Agent != "" {
-			granted, err = v.loginVaultSSH(v.RC.SSHAuth)
-		} else if v.RC.JWTAuth != nil && v.RC.JWTAuth.JWT != "" {
-			path := v.RC.JWTAuth.Path
+		if v.rc.SSHAuth != nil && v.Agent != "" {
+			granted, err = v.loginVaultSSH(v.rc.SSHAuth)
+		} else if v.rc.JWTAuth != nil && v.rc.JWTAuth.JWT != "" {
+			path := v.rc.JWTAuth.Path
 			if path == "" {
 				path = "jwt"
 			}
-			granted, err = v.loginVault(path, map[string]string{"jwt": v.RC.JWTAuth.JWT, "role": v.RC.JWTAuth.Role})
+			granted, err = v.loginVault(path, map[string]string{"jwt": v.rc.JWTAuth.JWT, "role": v.rc.JWTAuth.Role})
 		}
 		if err != nil {
 			return "", err
@@ -260,16 +275,16 @@ func (v *Vauth) Connect(renew bool) (string, error) {
 		operation = "generated"
 	}
 
-	v.VaultToken = ""
+	v.vaultToken = ""
 	if established != nil {
 		if operation != "reused" {
 			v.saveTokenCache(established)
 		}
 		v.tokenStatus(operation, established)
-		v.VaultToken = established.Value
+		v.vaultToken = established.Value
 	}
 	v.connected = true
-	return v.VaultToken, nil
+	return v.vaultToken, nil
 }
 
 // reauthenticable returns err unless it is an invalid token (400/403), in

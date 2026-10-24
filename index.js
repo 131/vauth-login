@@ -11,6 +11,7 @@ const semver     = require('semver');
 const trim       = require('mout/string/trim');
 const eachLimit = require('nyks/async/eachLimit');
 const walk       = require('nyks/object/walk');
+const freeze     = require('nyks/object/freeze');
 const humanDiff  = require('nyks/date/humanDiff');
 
 const request    = require('nyks/http/request');
@@ -53,9 +54,12 @@ class HTTPError extends Error {
 }
 
 class VauthLogin {
+  #rc;
+  #rcFile;
+  #VAULT_ADDR;
+  #vaultToken;
+
   constructor() {
-
-
     // A project may pin the vauth-login version it expects.
     // Only vauth-login itself is checked, against the running version.
     let manifest = path.resolve('package.json');
@@ -66,39 +70,48 @@ class VauthLogin {
         throw `Unsupported ${PACKAGE_NAME} version ${VERSION} (project requires ${required})`;
     }
 
-    this.rc = {};
+    this.#rcFile = VAUTH_RC.find(file => file && fs.existsSync(file));
 
-    let vauth_rc = VAUTH_RC.filter(path => path && fs.existsSync(path))[0];
-    if(vauth_rc)
-      this.rc = loadRC(vauth_rc);
-    this.rc_file = vauth_rc;
+    let document = {};
+    if(this.#rcFile)
+      document = parse(fs.readFileSync(this.#rcFile, 'utf8')) || {};
+    const snapshot = freeze(document);
 
+    const auth = {};
+    for(const key of RC_KEYS) {
+      if(Object.hasOwn(document, key))
+        auth[key] = document[key];
+    }
+    this.#rc = walk(structuredClone(auth), value => replaceEnv(value, {env : process.env}));
+    this.#rc.document = snapshot;
     if(!process.env.SSH_AUTH_SOCK && process.platform !== 'win32')
-      this.rc.token_cache = false;
+      this.#rc.token_cache = false;
 
-    this.VAULT_ADDR = this.rc.vault_addr || process.env.VAULT_ADDR; //might be null
-    this.VAULT_TOKEN = process.env.VAULT_TOKEN;
+    this.#VAULT_ADDR = this.#rc.vault_addr || process.env.VAULT_ADDR; //might be null
+    this.#vaultToken = process.env.VAULT_TOKEN;
 
     // A project's ./.vauthrc chooses the Vault; the user vouches for it in
     // ~/.vauthrc (its vault_addr or its known_vaults list) or VAULT_ADDR; otherwise the request is refused.
     this._safe_vault = true;
-    if(vauth_rc === VAUTH_RC[1] && vauth_rc !== HOME_RC && this.rc.vault_addr) {
+    if(this.#rcFile === VAUTH_RC[1] && this.#rcFile !== HOME_RC && this.#rc.vault_addr) {
       const home = fs.existsSync(HOME_RC) ? loadRC(HOME_RC) : {};
       const known = [process.env.VAULT_ADDR, home.vault_addr, ...(Array.isArray(home.known_vaults) ? home.known_vaults : [])].map(normalizeAddr);
-      this._safe_vault = known.includes(normalizeAddr(this.rc.vault_addr));
+      this._safe_vault = known.includes(normalizeAddr(this.#rc.vault_addr));
     }
-
-
   }
+
+  get RC() { return this.#rc.document; }
+  get VAULT_ADDR() { return this.#VAULT_ADDR; }
+  get VAULT_TOKEN() { return this.#vaultToken; }
 
   static Version() {
     return VERSION;
   }
 
   _token_cache_key() {
-    const {ssh_auth, jwt_auth} = this.rc;
+    const {ssh_auth, jwt_auth} = this.#rc;
     return createHash('sha256').update(JSON.stringify({
-      vault_addr : trim(this.VAULT_ADDR || '', '/'), ssh_auth, jwt_auth,
+      vault_addr : trim(this.#VAULT_ADDR || '', '/'), ssh_auth, jwt_auth,
     })).digest('hex');
   }
 
@@ -107,7 +120,7 @@ class VauthLogin {
   }
 
   async _read_token_cache() {
-    if(this.rc.token_cache === false)
+    if(this.#rc.token_cache === false)
       return;
     try {
       const armor = fs.readFileSync(this._token_cache_file(), 'utf8');
@@ -116,7 +129,7 @@ class VauthLogin {
   }
 
   async _save_cached_token(token, metadata) {
-    if(this.rc.token_cache === false)
+    if(this.#rc.token_cache === false)
       return;
     const ttl = metadata.ttl === undefined ? metadata.lease_duration : metadata.ttl;
     const file = this._token_cache_file();
@@ -148,19 +161,19 @@ class VauthLogin {
 
   async Connect(renew = false) {
     if(this._connected && !renew)
-      return this.VAULT_TOKEN;
+      return this.#vaultToken;
 
     // An inherited token is the caller's: returned as is, never looked up,
     // renewed or persisted.
-    if(this.VAULT_TOKEN && !renew) {
+    if(this.#vaultToken && !renew) {
       console.error('Vauth token: inherited');
       this._connected = true;
-      return this.VAULT_TOKEN;
+      return this.#vaultToken;
     }
 
-    const {ssh_auth, jwt_auth} = this.rc;
+    const {ssh_auth, jwt_auth} = this.#rc;
     if(!ssh_auth && !jwt_auth) {
-      this.VAULT_TOKEN = undefined;
+      this.#vaultToken = undefined;
       return;
     }
     this._connected = false;
@@ -213,7 +226,7 @@ class VauthLogin {
         await this._save_cached_token(token, metadata);
       this._token_status(operation, metadata);
     }
-    this.VAULT_TOKEN = token;
+    this.#vaultToken = token;
     this._connected = true;
     return token;
   }
@@ -259,7 +272,7 @@ class VauthLogin {
 
     return auth;
   }
-  async LookupSelf(token = this.VAULT_TOKEN) {
+  async LookupSelf(token = this.#vaultToken) {
     const {body} = await this.Request('GET', 'auth/token/lookup-self', token, null, 200);
     const response = JSON.parse(body).data;
     if(!response || !Number.isFinite(response.ttl) || response.ttl < 0)
@@ -278,12 +291,12 @@ class VauthLogin {
   }
 
   _vault_url(apiPath) {
-    return `${trim(this.VAULT_ADDR || '', '/')}/v1/${String(apiPath).replace(/^\/+/, '')}`;
+    return `${trim(this.#VAULT_ADDR || '', '/')}/v1/${String(apiPath).replace(/^\/+/, '')}`;
   }
 
   async Request(method, apiPath, token = '', payload = null, expect = 200) {
     if(!this._safe_vault)
-      throw new Error(`Unknown vault ${normalizeAddr(this.VAULT_ADDR)}, selected by ${this.rc_file}. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.`);
+      throw new Error(`Unknown vault ${normalizeAddr(this.#VAULT_ADDR)}, selected by ${this.#rcFile}. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.`);
     const headers = {};
     if(token) headers['X-Vault-Token'] = token;
     if(payload !== null) headers['Content-Type'] = 'application/json';

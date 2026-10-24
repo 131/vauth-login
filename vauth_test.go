@@ -123,8 +123,8 @@ func newFixture(t *testing.T, options fixtureOptions) *fixture {
 // client avoids the real user's environment, configuration and cache.
 func (f *fixture) client() *Vauth {
 	return &Vauth{
-		RC:         RC{JWTAuth: &JWTAuth{Path: "jwt", JWT: "test-jwt", Role: "test-role"}},
-		VaultAddr:  f.server.URL,
+		rc:         RC{JWTAuth: &JWTAuth{Path: "jwt", JWT: "test-jwt", Role: "test-role"}},
+		vaultAddr:  f.server.URL,
 		Agent:      agentSocket,
 		TokenCache: true,
 		CacheDir:   filepath.Join(f.dir, ".vauth", "tokens"),
@@ -264,7 +264,7 @@ func TestCachedTokensReusedWithoutRevocationCheck(t *testing.T) {
 	f.seed(v, 12*hour)
 	equal(t, connect(t, v, false), "cached-token")
 	equal(t, len(f.requests), 0)
-	if _, err := v.LookupSelf(v.VaultToken); err == nil {
+	if _, err := v.LookupSelf(v.vaultToken); err == nil {
 		t.Fatal("lookup should fail")
 	}
 }
@@ -305,7 +305,7 @@ func TestEnvironmentTokenReturnedAsIs(t *testing.T) {
 	f := newFixture(t, fixtureOptions{lookupStatus: 500, renewStatus: 500})
 	v := f.client()
 	f.seed(v, 12*hour)
-	v.VaultToken = "environment-token"
+	v.vaultToken = "environment-token"
 	var stderr bytes.Buffer
 	v.Stderr = &stderr
 	equal(t, connect(t, v, false), "environment-token")
@@ -316,8 +316,8 @@ func TestEnvironmentTokenReturnedAsIs(t *testing.T) {
 
 	// Without any configuration, an inherited token is still the caller's.
 	v = f.client()
-	v.RC = RC{}
-	v.VaultToken = "environment-token"
+	v.rc = RC{}
+	v.vaultToken = "environment-token"
 	equal(t, connect(t, v, false), "environment-token")
 	equal(t, len(f.requests), 0)
 }
@@ -356,7 +356,7 @@ func TestCacheIsolation(t *testing.T) {
 	first := f.client()
 	f.seed(first, 12*hour)
 	second := f.client()
-	second.RC.JWTAuth.Role = "other-role"
+	second.rc.JWTAuth.Role = "other-role"
 	equal(t, connect(t, second, false), "fresh-token")
 	if first.tokenCacheFile() == second.tokenCacheFile() {
 		t.Fatal("cache files should differ")
@@ -364,7 +364,7 @@ func TestCacheIsolation(t *testing.T) {
 	equal(t, f.read(first).Token, "cached-token")
 	equal(t, f.read(second).Token, "fresh-token")
 	third := f.client()
-	third.VaultAddr = "http://other-vault.test"
+	third.vaultAddr = "http://other-vault.test"
 	if third.tokenCacheKey() == first.tokenCacheKey() {
 		t.Fatal("cache keys should differ")
 	}
@@ -379,15 +379,15 @@ func TestCacheIsolation(t *testing.T) {
 func TestTokenCacheKeyMatchesNode(t *testing.T) {
 	// sha256 of JSON.stringify({vault_addr, ssh_auth, jwt_auth}) as the Node
 	// implementation renders it (undefined members omitted).
-	v := &Vauth{VaultAddr: "https://vault.example.test/", RC: RC{SSHAuth: &SSHAuth{Role: "alice"}}}
+	v := &Vauth{vaultAddr: "https://vault.example.test/", rc: RC{SSHAuth: &SSHAuth{Role: "alice"}}}
 	equal(t, v.tokenCacheKey(), sha256Hex(`{"vault_addr":"https://vault.example.test","ssh_auth":{"role":"alice"}}`))
-	v = &Vauth{VaultAddr: "https://vault.example.test", RC: RC{JWTAuth: &JWTAuth{Path: "jwt", JWT: "x", Role: "r"}}}
+	v = &Vauth{vaultAddr: "https://vault.example.test", rc: RC{JWTAuth: &JWTAuth{Path: "jwt", JWT: "x", Role: "r"}}}
 	equal(t, v.tokenCacheKey(), sha256Hex(`{"vault_addr":"https://vault.example.test","jwt_auth":{"path":"jwt","jwt":"x","role":"r"}}`))
 	rc, err := ParseRC([]byte("vault_addr: https://vault.example.test\nssh_auth:\n  role: $${env.USER}\n"), ".vauthrc", map[string]string{"USER": "bob"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	v = &Vauth{VaultAddr: rc.VaultAddr, RC: *rc}
+	v = &Vauth{vaultAddr: rc.VaultAddr, rc: *rc}
 	equal(t, v.tokenCacheKey(), sha256Hex(`{"vault_addr":"https://vault.example.test","ssh_auth":{"role":"bob"}}`))
 }
 
@@ -416,12 +416,12 @@ func TestWithoutAuthMethodCachesIgnored(t *testing.T) {
 	f := newFixture(t, fixtureOptions{lookupStatus: 403})
 	v := f.client()
 	f.seed(v, 12*hour)
-	v.RC = RC{}
+	v.rc = RC{}
 	equal(t, connect(t, v, false), "")
-	equal(t, v.VaultToken, "")
-	v.VaultToken = "environment-token"
+	equal(t, v.vaultToken, "")
+	v.vaultToken = "environment-token"
 	equal(t, connect(t, v, true), "")
-	equal(t, v.VaultToken, "")
+	equal(t, v.vaultToken, "")
 	equal(t, len(f.requests), 0)
 }
 
@@ -429,7 +429,7 @@ func TestRenewIgnoresTokensAndSaves(t *testing.T) {
 	f := newFixture(t, fixtureOptions{})
 	v := f.client()
 	f.seed(v, 12*hour)
-	v.VaultToken = "environment-token"
+	v.vaultToken = "environment-token"
 	equal(t, connect(t, v, true), "fresh-token")
 	equalPaths(t, f.paths(), "/v1/auth/jwt/login")
 	equal(t, f.read(v).Token, "fresh-token")
@@ -498,7 +498,7 @@ func TestNormalReuseNeverWrites(t *testing.T) {
 	f := newFixture(t, fixtureOptions{})
 	v := f.client()
 	f.seed(v, 12*hour)
-	v.VaultToken = "cached-token"
+	v.vaultToken = "cached-token"
 	before, _ := os.ReadFile(v.tokenCacheFile())
 	stat, _ := os.Stat(v.tokenCacheFile())
 	equal(t, connect(t, v, false), "cached-token")
@@ -547,7 +547,7 @@ func TestTokenCacheDisabled(t *testing.T) {
 	f = newFixture(t, fixtureOptions{})
 	v = f.client()
 	v.TokenCache = false
-	v.VaultToken = "environment-token"
+	v.vaultToken = "environment-token"
 	equal(t, connect(t, v, false), "environment-token")
 	equal(t, len(f.requests), 0)
 	if _, err := os.Stat(v.tokenCacheFile()); err == nil {
@@ -602,7 +602,7 @@ func TestWithoutAgentCacheSkipped(t *testing.T) {
 }
 
 func TestTokenStatus(t *testing.T) {
-	v := &Vauth{VaultAddr: "https://vault.example.test"}
+	v := &Vauth{vaultAddr: "https://vault.example.test"}
 	for _, c := range []struct {
 		ttl      float64
 		duration string
@@ -672,7 +672,7 @@ func TestUnknownVaultRejected(t *testing.T) {
 			t.Fatal(err)
 		}
 		v := f.client()
-		v.RC, v.RCFile, v.CacheDir = *rc, projectRC, filepath.Join(home, ".vauth", "tokens")
+		v.rc, v.rcFile, v.CacheDir = *rc, projectRC, filepath.Join(home, ".vauth", "tokens")
 		v.unknownVault = !KnownVault(rc.VaultAddr, home, environ)
 		return v
 	}
@@ -684,7 +684,7 @@ func TestUnknownVaultRejected(t *testing.T) {
 	}
 	equal(t, stderr.String(), "")
 	equal(t, len(f.requests), 0)
-	v.VaultToken = "inherited-token"
+	v.vaultToken = "inherited-token"
 	equal(t, connect(t, v, false), "inherited-token")
 	equal(t, len(f.requests), 0)
 

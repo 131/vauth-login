@@ -17,6 +17,30 @@ is `VauthLogin.Version()` in Node and the package variable `Version` in Go.
 There are no alternate-case aliases, `Login` synonym, or forwarding API proxies.
 HTTP/JSON field spelling and native error types remain language-specific.
 
+## Read-only client data
+
+| Data | Node property | Go reader | Meaning |
+| --- | --- | --- | --- |
+| Configuration | `client.RC` | `client.RC()` | Complete parsed JSON document, including sections vauth-login does not interpret |
+| Address | `client.VAULT_ADDR` | `client.VAULT_ADDR()` | Effective address, with the environment fallback |
+| Token | `client.VAULT_TOKEN` | `client.VAULT_TOKEN()` | Current token managed by `Connect` |
+
+`RC` retains the file's original values/macros. Only vauth-login's private authentication
+view expands `env` macros. `RC.vault_addr` can therefore differ from the effective
+address. Node returns one recursively frozen snapshot, using
+`nyks/object/freeze`; Go returns an independent JSON snapshot rather than a
+shared mutable map. Copy the sections you need before expanding macros in embedding code.
+
+The selected file path and authentication state are internal. There is no public
+`rc`, `rc_file`, `RCFile`, address/token setter, or mutable address/token field.
+The instance is not frozen/sealed before subclass construction; subclasses may add their
+own state after `super()`.
+
+Node construction keeps the normal environment and file flow: `VAUTHRC`,
+`./.vauthrc`, then `~/.vauthrc`. Home and cache paths use the native user home;
+agent selection reads `SSH_AUTH_SOCK` at use time. No constructor options,
+environment snapshot, home/cache override or agent-capture mechanism is added.
+
 ## Node
 
 ```js
@@ -46,7 +70,7 @@ Timeouts propagate with `code = 'ETIMEDOUT'`.
 `res.statusCode` fields. `body` is available to SDK callers as a non-enumerable
 property; error logging displays the status.
 
-The client exposes `rc`, `rc_file`, `VAULT_ADDR`, and `VAULT_TOKEN`.
+The three read-only properties are `RC`, `VAULT_ADDR`, and `VAULT_TOKEN`.
 `Connect(renew)` returns an inherited `VAULT_TOKEN` as is, then the
 token for configured authentication, or undefined when authentication is
 unavailable. `Request()` checks the destination before constructing or sending
@@ -68,16 +92,15 @@ metadata, err := client.LookupSelf(token)
 status, body, err := client.Request("GET", "auth/token/lookup-self", token, nil, 200)
 ```
 
-`Vauth` exposes `RC`, `RCFile`, `VaultAddr`, `VaultToken`, `Agent`, `TokenCache`,
-`CacheDir`, `Environ`, `Stderr`, `HTTPClient`, and `Now`. `New()`
-discovers the agent, loads configuration, applies the process environment and
-marks a Vault selected by `./.vauthrc` as unknown unless `KnownVault(addr, home,
-environ)` finds it in `~/.vauthrc` or matches environment `VAULT_ADDR`. For
-tests/embedded use, fields may be supplied directly. `Connect(renew)` returns
-the token; an inherited `VaultToken` is returned as is unless `renew` is set.
-`Request()` checks destination trust before constructing or sending any HTTP
-request, including login, renewal and `LookupSelf()`. An unknown project-selected
-address is refused without interaction. No confirmation callback is exposed.
+`Agent`, `TokenCache`, `CacheDir`, `HomeDir`, `Environ`, `Stderr`, `HTTPClient`
+and `Now` remain public Go settings, with their existing defaults.
+
+`New()` discovers the agent and loads both the complete document and its private
+authentication view. `RC()`, `VAULT_ADDR()` and `VAULT_TOKEN()` are native Go
+reader methods with the same names as the Node properties. `Connect(renew)`
+returns an inherited token as is unless `renew` is set. `Request()` checks the
+selected destination before constructing or sending any HTTP request, including
+login, renewal and `LookupSelf()`. Unknown project-selected addresses are refused.
 
 `LookupSelf(token)` validates online and returns `*LookupToken` with `TTL`,
 `Renewable`, `CreationTTL`, `EntityID`, and `LeaseDuration`.
