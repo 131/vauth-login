@@ -4,7 +4,6 @@
 const os   = require('os');
 const fs    = require('fs');
 const path  = require('path');
-const url   = require('url');
 const {createHash, randomUUID} = require('crypto');
 const {encrypt, decrypt} = require('ssh-agent-crypt');
 const promptBool = require('cnyks/prompt/bool');
@@ -321,8 +320,12 @@ class VauthLogin {
     const headers = {};
     if(token) headers['X-Vault-Token'] = token;
     if(payload !== null) headers['Content-Type'] = 'application/json';
-    const query = {...url.parse(this.vaultURL(apiPath)), method, headers, json : true,
-      reqtimeout : this.requestTimeout || 60000};
+    const target = new URL(this.vaultURL(apiPath));
+    const query = {
+      protocol : target.protocol, hostname : target.hostname.replace(/^\[(.*)\]$/, '$1'),
+      port : target.port, path : target.pathname + target.search,
+      method, headers, json : true, reqtimeout : this.requestTimeout || 60000,
+    };
     const res = await request(query, payload);
     const body = await drain(res);
     if(expect && res.statusCode !== expect)
