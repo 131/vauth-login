@@ -155,3 +155,51 @@ func TestNewRequiresUserHome(t *testing.T) {
 		t.Fatalf("missing user home should fail initialization: %v", err)
 	}
 }
+
+func TestPublicTransportRejectsUnknownVaultAfterInheritance(t *testing.T) {
+	f := newFixture(t, fixtureOptions{})
+	v := f.client()
+	v.VaultToken = "inherited-token"
+	v.unknownVault = true
+	v.RCFile = "/project/.vauthrc"
+	var stderr bytes.Buffer
+	v.Stderr = &stderr
+	token, err := v.Connect(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, token, "inherited-token")
+	equal(t, v.VaultURL("auth/token/lookup-self"), f.server.URL+"/v1/auth/token/lookup-self")
+	check := func(err error) {
+		t.Helper()
+		if err == nil || !strings.Contains(err.Error(), "Unknown vault") {
+			t.Fatalf("unknown Vault was not refused: %v", err)
+		}
+		if strings.Contains(err.Error(), "inherited-token") || strings.Contains(err.Error(), "secret-jwt") {
+			t.Fatal("error leaked credentials")
+		}
+	}
+	_, err = v.LookupSelf(token)
+	check(err)
+	for _, c := range []struct {
+		method, path, token string
+		payload             any
+	}{
+		{"GET", "auth/token/lookup-self", token, nil},
+		{"POST", "auth/jwt/login", "", map[string]any{"jwt": "secret-jwt"}},
+		{"GET", "identity/entity/id/test-entity", "", nil},
+	} {
+		status, body, err := v.Request(c.method, c.path, c.token, c.payload, 200)
+		check(err)
+		equal(t, status, 0)
+		if body != nil {
+			t.Fatal("refused request returned a response body")
+		}
+	}
+	_, err = v.renewToken(token)
+	check(err)
+	_, err = v.loginVault("jwt", map[string]any{"jwt": "secret-jwt"})
+	check(err)
+	equal(t, len(f.requests), 0)
+	equal(t, stderr.String(), "Vauth token: inherited\n")
+}

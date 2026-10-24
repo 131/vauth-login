@@ -91,36 +91,32 @@ class VauthLogin {
 
   }
 
-  static version() {
+  static Version() {
     return VERSION;
   }
 
-  version() {
-    return VauthLogin.version();
-  }
-
-  // A project-selected Vault must be known before login or renewal.
+  // A project-selected Vault must be known before any HTTP request.
   _check_vault() {
     if(!this._safe_vault)
       throw new Error(`Unknown vault ${normalizeAddr(this.VAULT_ADDR)}, selected by ${this.rc_file}. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.`);
   }
 
-  _token_cache_key() {
+  TokenCacheKey() {
     const {ssh_auth, jwt_auth} = this.rc;
     return createHash('sha256').update(JSON.stringify({
       vault_addr : trim(this.VAULT_ADDR || '', '/'), ssh_auth, jwt_auth,
     })).digest('hex');
   }
 
-  _token_cache_file() {
-    return path.join(os.homedir(), '.vauth', 'tokens', this._token_cache_key() + '.creds');
+  TokenCacheFile() {
+    return path.join(os.homedir(), '.vauth', 'tokens', this.TokenCacheKey() + '.creds');
   }
 
   async _read_token_cache() {
     if(this.rc.token_cache === false)
       return;
     try {
-      const armor = fs.readFileSync(this._token_cache_file(), 'utf8');
+      const armor = fs.readFileSync(this.TokenCacheFile(), 'utf8');
       return JSON.parse(await decrypt(armor));
     } catch(err) {}
   }
@@ -129,7 +125,7 @@ class VauthLogin {
     if(this.rc.token_cache === false)
       return;
     const ttl = metadata.ttl === undefined ? metadata.lease_duration : metadata.ttl;
-    const file = this._token_cache_file();
+    const file = this.TokenCacheFile();
     const temporary = file + '.' + randomUUID() + '.next';
     try {
       const {lease_duration} = metadata;
@@ -156,7 +152,7 @@ class VauthLogin {
     console.error('Vauth token: %s · %s', operation, validity);
   }
 
-  async connect(renew = false) {
+  async Connect(renew = false) {
     if(this._connected && !renew)
       return this.VAULT_TOKEN;
 
@@ -188,7 +184,6 @@ class VauthLogin {
       if(ttl > 0 && ttl <= cached.lease_duration / 3) {
         if(cached.renewable) {
           try {
-            this._check_vault();
             metadata = await this._renew_token(token);
             token = metadata.client_token;
             operation = 'renewed';
@@ -206,7 +201,6 @@ class VauthLogin {
     }
 
     if(!token) {
-      this._check_vault();
       const agent_path = process.env.SSH_AUTH_SOCK || (process.platform === 'win32' ? 'pageant' : null);
       if(ssh_auth && agent_path) {
         metadata = await this._login_vault_ssh({...ssh_auth}, agent_path);
@@ -231,15 +225,11 @@ class VauthLogin {
   }
 
   async _renew_token(token) {
-    const {body} = await this.request('POST', 'auth/token/renew-self', token, {}, 200);
+    const {body} = await this.Request('POST', 'auth/token/renew-self', token, {}, 200);
     const auth = JSON.parse(body).auth;
     if(!auth || !auth.client_token || !Number.isFinite(auth.lease_duration) || auth.lease_duration < 0)
       throw new Error('Invalid Vault token renewal response');
     return auth;
-  }
-
-  async login(renew = false) {
-    return this.connect(renew);
   }
 
   async _login_vault_ssh({path = 'ssh', role}, agent_path = process.env.SSH_AUTH_SOCK) {
@@ -254,7 +244,7 @@ class VauthLogin {
       if(auth)
         return;
 
-      const {body} = await this.request('GET', `auth/${path}/nonce`, '', null, 200);
+      const {body} = await this.Request('GET', `auth/${path}/nonce`, '', null, 200);
       const {data : {nonce} = {}} = JSON.parse(body);
       if(typeof nonce !== 'string' || !nonce)
         throw new Error('Invalid Vault nonce response');
@@ -275,8 +265,8 @@ class VauthLogin {
 
     return auth;
   }
-  async _lookup_token(token) {
-    const {body} = await this.request('GET', 'auth/token/lookup-self', token, null, 200);
+  async LookupSelf(token = this.VAULT_TOKEN) {
+    const {body} = await this.Request('GET', 'auth/token/lookup-self', token, null, 200);
     const response = JSON.parse(body).data;
     if(!response || !Number.isFinite(response.ttl) || response.ttl < 0)
       throw new Error('Invalid Vault token TTL');
@@ -285,27 +275,24 @@ class VauthLogin {
     return response;
   }
 
-  async lookupSelf(token = this.VAULT_TOKEN) {
-    return this._lookup_token(token);
-  }
-
   async _login_vault(path, payload) {
-    const {body} = await this.request('POST', `auth/${path}/login`, '', payload, 200);
+    const {body} = await this.Request('POST', `auth/${path}/login`, '', payload, 200);
     const auth = JSON.parse(body).auth;
     if(!auth || !auth.client_token || !Number.isFinite(auth.lease_duration) || auth.lease_duration < 0)
       throw new Error('Invalid Vault login response');
     return auth;
   }
 
-  vaultURL(apiPath) {
+  VaultURL(apiPath) {
     return `${trim(this.VAULT_ADDR || '', '/')}/v1/${String(apiPath).replace(/^\/+/, '')}`;
   }
 
-  async request(method, apiPath, token = '', payload = null, expect = 200) {
+  async Request(method, apiPath, token = '', payload = null, expect = 200) {
+    this._check_vault();
     const headers = {};
     if(token) headers['X-Vault-Token'] = token;
     if(payload !== null) headers['Content-Type'] = 'application/json';
-    const target = new URL(this.vaultURL(apiPath));
+    const target = new URL(this.VaultURL(apiPath));
     const query = {
       protocol : target.protocol, hostname : target.hostname.replace(/^\[(.*)\]$/, '$1'),
       port : target.port, path : target.pathname + target.search,
@@ -317,6 +304,7 @@ class VauthLogin {
       throw new HTTPError(res.statusCode, body.toString());
     return {status : res.statusCode, body};
   }
+
 
 }
 

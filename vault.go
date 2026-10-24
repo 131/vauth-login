@@ -32,21 +32,18 @@ type auth struct {
 	Renewable     bool   `json:"renewable"`
 }
 
-// lookup is the relevant part of auth/token/lookup-self.
-type lookup struct {
-	TTL         float64 `json:"ttl"`
-	Renewable   bool    `json:"renewable"`
-	CreationTTL int64   `json:"creation_ttl"`
-	EntityID    string  `json:"entity_id"`
-}
-
-func (v *Vauth) vaultURL(path string) string {
+// VaultURL returns an API URL relative to this configured Vault.
+func (v *Vauth) VaultURL(path string) string {
 	return strings.TrimRight(v.VaultAddr, "/") + "/v1/" + strings.TrimLeft(path, "/")
 }
 
-// request performs a Vault API call. A JSON payload is sent when non-nil.
+// Request performs a Vault API call after checking destination trust.
+// A JSON payload is sent when non-nil.
 // With expect > 0, another status is returned as *HTTPError.
-func (v *Vauth) request(method, path, token string, payload any, expect int) (int, []byte, error) {
+func (v *Vauth) Request(method, path, token string, payload any, expect int) (int, []byte, error) {
+	if err := v.checkVault(); err != nil {
+		return 0, nil, err
+	}
 	var body io.Reader
 	if payload != nil {
 		encoded, err := json.Marshal(payload)
@@ -55,7 +52,7 @@ func (v *Vauth) request(method, path, token string, payload any, expect int) (in
 		}
 		body = bytes.NewReader(encoded)
 	}
-	req, err := http.NewRequest(method, v.vaultURL(path), body)
+	req, err := http.NewRequest(method, v.VaultURL(path), body)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -107,7 +104,7 @@ func parseAuth(response []byte, invalid string) (*auth, error) {
 }
 
 func (v *Vauth) loginVault(path string, payload any) (*auth, error) {
-	status, response, err := v.request("POST", "auth/"+path+"/login", "", payload, 0)
+	status, response, err := v.Request("POST", "auth/"+path+"/login", "", payload, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +131,7 @@ func (v *Vauth) loginVaultSSH(config *SSHAuth) (*auth, error) {
 		return nil, fmt.Errorf("Unable to list ssh-agent keys: %w", err)
 	}
 	for _, key := range keys {
-		_, response, err := v.request("GET", "auth/"+path+"/nonce", "", nil, 200)
+		_, response, err := v.Request("GET", "auth/"+path+"/nonce", "", nil, 200)
 		if err != nil {
 			return nil, err
 		}
@@ -171,13 +168,14 @@ func (v *Vauth) loginVaultSSH(config *SSHAuth) (*auth, error) {
 	return nil, errors.New("Could not login to vault")
 }
 
-func (v *Vauth) lookupToken(token string) (*lookup, int64, error) {
-	_, response, err := v.request("GET", "auth/token/lookup-self", token, nil, 200)
+// LookupSelf validates a token online and returns metadata including entity ID.
+func (v *Vauth) LookupSelf(token string) (*LookupToken, error) {
+	_, response, err := v.Request("GET", "auth/token/lookup-self", token, nil, 200)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	var parsed struct {
-		Data *lookup `json:"data"`
+		Data *LookupToken `json:"data"`
 	}
 	var present struct {
 		Data struct {
@@ -185,32 +183,25 @@ func (v *Vauth) lookupToken(token string) (*lookup, int64, error) {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(response, &parsed); err != nil || parsed.Data == nil || parsed.Data.TTL < 0 {
-		return nil, 0, errors.New("Invalid Vault token TTL")
+		return nil, errors.New("Invalid Vault token TTL")
 	}
 	if err := json.Unmarshal(response, &present); err != nil || present.Data.TTL == nil {
-		return nil, 0, errors.New("Invalid Vault token TTL")
+		return nil, errors.New("Invalid Vault token TTL")
 	}
 	lease := parsed.Data.CreationTTL
 	if cached := v.readTokenCache(); cached != nil && cached.Token == token {
 		lease = cached.LeaseDuration
 	}
-	return parsed.Data, lease, nil
+	parsed.Data.LeaseDuration = lease
+	return parsed.Data, nil
 }
 
 func (v *Vauth) renewToken(token string) (*auth, error) {
-	_, response, err := v.request("POST", "auth/token/renew-self", token, map[string]any{}, 200)
+	_, response, err := v.Request("POST", "auth/token/renew-self", token, map[string]any{}, 200)
 	if err != nil {
 		return nil, err
 	}
 	return parseAuth(response, "Invalid Vault token renewal response")
-}
-
-// VaultURL returns an API URL relative to this configured Vault.
-func (v *Vauth) VaultURL(path string) string { return v.vaultURL(path) }
-
-// Request performs a JSON Vault call. Set expect to zero to handle status yourself.
-func (v *Vauth) Request(method, path, token string, payload any, expect int) (int, []byte, error) {
-	return v.request(method, path, token, payload, expect)
 }
 
 // LookupToken is the token metadata returned by lookup-self.
@@ -220,13 +211,4 @@ type LookupToken struct {
 	CreationTTL   int64   `json:"creation_ttl"`
 	EntityID      string  `json:"entity_id"`
 	LeaseDuration int64   `json:"lease_duration"`
-}
-
-// LookupSelf validates a token online and returns metadata including entity ID.
-func (v *Vauth) LookupSelf(token string) (*LookupToken, error) {
-	info, lease, err := v.lookupToken(token)
-	if err != nil {
-		return nil, err
-	}
-	return &LookupToken{info.TTL, info.Renewable, info.CreationTTL, info.EntityID, lease}, nil
 }

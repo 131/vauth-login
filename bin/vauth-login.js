@@ -16,7 +16,7 @@ async function main() {
     return;
   }
   const VauthLogin = require('../index');
-  const token = await new VauthLogin().connect(args.includes('--renew'));
+  const token = await new VauthLogin().Connect(args.includes('--renew'));
   if(!token)
     throw new Error('Could not login to vault: no authentication method available');
   process.stdout.write(token);

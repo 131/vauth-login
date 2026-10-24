@@ -54,7 +54,7 @@ vauth-login --renew
 ```
 
 In CI, supply the trusted Vault address through the environment. Only a
-matching project address skips the confirmation described under Configuration:
+matching project address passes the trust check described under Configuration:
 
 ```bash
 export VAULT_ADDR=https://vault.example.test
@@ -90,8 +90,8 @@ token_cache: true
 Configuration keys: `vault_addr`, `ssh_auth`, `jwt_auth`, `token_cache`, and
 `known_vaults`.
 
-A `./.vauthrc` belongs to the project; `~/.vauthrc` belongs to the user. Login
-or renewal to a project-selected Vault is allowed only when it is the
+A `./.vauthrc` belongs to the project; `~/.vauthrc` belongs to the user. Every
+HTTP call to a project-selected Vault is allowed only when it is the
 `vault_addr` of `~/.vauthrc`, appears in its `known_vaults`, or matches environment
 `VAULT_ADDR`. Otherwise the operation fails without a prompt. The environment
 address is trusted in memory, without rewriting `~/.vauthrc`. Explicit
@@ -169,12 +169,19 @@ all findings. The Claude report remains unchanged.
 
 Neither source reviewer received earlier reports, findings, scores or task
 handoffs. Documentation ranges were isolated before reading. Reports retain
-their own conclusions and scores, without calibration for agreement. Both
+their own conclusions and scores, without calibration for agreement. Both assessed snapshots
 identify missing destination-trust enforcement in SDK transport helpers while
 distinguishing the restricted CLI path. The Sol report also examines parser-log
 disclosure, plaintext HTTP acceptance, mutable Go cache identity and publication
 controls. Verified source observations are separated from hypothetical impact
 and hosted behavior; neither report substitutes for a live advisory scan.
+
+The current implementation checks destination trust in the common `Request`
+transport before every HTTP call, covering `LookupSelf`, login and renewal.
+Public Node/Go method names converge without compatibility aliases. These
+post-assessment implementation changes address the reported F1 route; the
+original reports and scores remain frozen to their assessed commits. No new
+security assessment or revised score is implied.
 
 Sol performed syntax/formatting checks and bounded offline in-memory probes;
 Claude performed syntax, ESLint and formatting checks. Neither pass executed

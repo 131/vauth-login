@@ -264,7 +264,7 @@ func TestCachedTokensReusedWithoutRevocationCheck(t *testing.T) {
 	f.seed(v, 12*hour)
 	equal(t, connect(t, v, false), "cached-token")
 	equal(t, len(f.requests), 0)
-	if _, _, err := v.lookupToken(v.VaultToken); err == nil {
+	if _, err := v.LookupSelf(v.VaultToken); err == nil {
 		t.Fatal("lookup should fail")
 	}
 }
@@ -514,11 +514,11 @@ func TestNormalReuseNeverWrites(t *testing.T) {
 func TestLookupReturnsLease(t *testing.T) {
 	f := newFixture(t, fixtureOptions{ttl: seconds(hour)})
 	v := f.client()
-	info, lease, err := v.lookupToken("environment-token")
+	info, err := v.LookupSelf("environment-token")
 	if err != nil {
 		t.Fatal(err)
 	}
-	equal(t, lease, 24*hour)
+	equal(t, info.LeaseDuration, 24*hour)
 	equal(t, info.TTL, float64(hour))
 	equal(t, len(f.requests), 1)
 }

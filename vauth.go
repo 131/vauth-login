@@ -175,7 +175,7 @@ func (v *Vauth) debug(format string, args ...any) {
 	}
 }
 
-// checkVault rejects an unknown project-selected Vault before login or renewal.
+// checkVault rejects an unknown project-selected Vault before any HTTP request.
 func (v *Vauth) checkVault() error {
 	if v.unknownVault {
 		return fmt.Errorf("Unknown vault %s, selected by %s. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.", strings.Trim(v.VaultAddr, "/"), v.RCFile)
@@ -227,9 +227,6 @@ func (v *Vauth) Connect(renew bool) (string, error) {
 		}
 		if established.TTL > 0 && established.TTL <= float64(established.LeaseDuration)/3 {
 			if established.Renewable {
-				if err := v.checkVault(); err != nil {
-					return "", err
-				}
 				renewed, err := v.renewToken(cached.Token)
 				if err := reauthenticable(err); err != nil {
 					return "", err
@@ -247,9 +244,6 @@ func (v *Vauth) Connect(renew bool) (string, error) {
 	}
 
 	if established == nil {
-		if err := v.checkVault(); err != nil {
-			return "", err
-		}
 		var granted *auth
 		var err error
 		if v.RC.SSHAuth != nil && v.Agent != "" {

@@ -1,23 +1,43 @@
 # API and tests
 
+## Shared public API
+
+Node and Go use the same client method names and argument order:
+
+| Method | Arguments | Result |
+| --- | --- | --- |
+| `Connect` | `renew` | Token |
+| `LookupSelf` | `token` | Token metadata |
+| `Request` | `method, path, token, payload, expect` | HTTP status and body |
+| `VaultURL` | `path` | Configured Vault API URL |
+| `TokenCacheKey` | None | Cache identity hash |
+| `TokenCacheFile` | None | Cache pathname |
+
+Node returns promises for asynchronous operations; Go returns values and an
+error. Node keeps optional argument defaults; Go supplies them explicitly.
+Construction remains `new VauthLogin()` in Node and `New()` in Go. The version
+is `VauthLogin.Version()` in Node and the package variable `Version` in Go.
+There are no alternate-case aliases, `Login` synonym, or forwarding API proxies.
+HTTP/JSON field spelling and native error types remain language-specific.
+
 ## Node
 
 ```js
 const VauthLogin = require('vauth-login');
 const client = new VauthLogin();       // .vauthrc and process environment
-const token = await client.connect(); // optional true forces a fresh login
-const metadata = await client.lookupSelf(token);
+const token = await client.Connect(); // optional true forces a fresh login
+const metadata = await client.LookupSelf(token);
 // metadata: ttl, renewable, creation_ttl, entity_id, lease_duration
-const {status, body} = await client.request(
+const {status, body} = await client.Request(
   'GET', 'auth/token/lookup-self', token, null, 200
 );
 ```
 
-`connect(renew = false)` returns the token. `login(renew = false)` forwards
-that return value.
-`version()` returns the package version.
-`vaultURL(path)` constructs an API URL under the configured Vault `/v1/`.
-`request(method, path, token = '', payload = null, expect = 200)` sends object
+`Connect(renew = false)` returns the token.
+`VauthLogin.Version()` returns the package version.
+`TokenCacheKey()` and `TokenCacheFile()` expose the same cache helpers as Go.
+`VaultURL(path)` constructs an API URL under the configured Vault `/v1/`.
+`Request(method, path, token = '', payload = null, expect = 200)` sends object
 payloads as JSON and returns `{status, body}` (a Buffer). Set `expect = 0` to
 handle the status yourself. Each call makes a request to the configured Vault
 origin. Status filtering returns `HTTPError` for a status different from
@@ -32,9 +52,10 @@ Timeouts propagate with `code = 'ETIMEDOUT'`.
 property; error logging displays the status.
 
 The client exposes `rc`, `rc_file`, `VAULT_ADDR`, and `VAULT_TOKEN`.
-`connect(renew)` returns an inherited `VAULT_TOKEN` as is, then the
+`Connect(renew)` returns an inherited `VAULT_TOKEN` as is, then the
 token for configured authentication, or undefined when authentication is
-unavailable. Before login or renewal, `_check_vault()` rejects a Vault selected
+unavailable. `Request()` checks the destination before constructing or sending
+an HTTP request, including login, renewal and `LookupSelf()`. It rejects a Vault selected
 by `./.vauthrc` unless it matches environment `VAULT_ADDR`, or the user's
 `~/.vauthrc` lists it as `vault_addr` or in `known_vaults`. There is no interactive
 prompt or per-call acceptance override. Inherited tokens and valid cached
@@ -59,8 +80,9 @@ marks a Vault selected by `./.vauthrc` as unknown unless `KnownVault(addr, home,
 environ)` finds it in `~/.vauthrc` or matches environment `VAULT_ADDR`. For
 tests/embedded use, fields may be supplied directly. `Connect(renew)` returns
 the token; an inherited `VaultToken` is returned as is unless `renew` is set.
-Login or renewal to an unknown project-selected address is refused without
-interaction. No confirmation callback is exposed.
+`Request()` checks destination trust before constructing or sending any HTTP
+request, including login, renewal and `LookupSelf()`. An unknown project-selected
+address is refused without interaction. No confirmation callback is exposed.
 
 `LookupSelf(token)` validates online and returns `*LookupToken` with `TTL`,
 `Renewable`, `CreationTTL`, `EntityID`, and `LeaseDuration`.
@@ -69,8 +91,9 @@ interaction. No confirmation callback is exposed.
 `VaultURL(path)`, `TokenCacheKey()`, `TokenCacheFile()`, `LocateRC`, `ParseRC`,
 `Environ` and `HumanDiff` support embedding.
 
-`Connect(false)` ignores a token when no auth method is configured and returns an
-empty string without error; both CLIs report that empty result as a failure.
+`Connect(false)` returns an inherited token offline, even without authentication
+configuration. Otherwise, without an auth method it returns an empty string in
+Go or undefined in Node; both CLIs report that empty result as a failure.
 One client announces status once per connection unless forced to log in again.
 
 ## CLI contract (Node and Go)
@@ -118,7 +141,9 @@ lease thresholds and renewal baseline, forced login, inherited credentials
 returned as is, rejection of unknown project addresses with and without a TTY,
 home/environment allowlisting, rejection of removed `--accept`, offline cache
 reuse, 400/403 reauthentication, server failures, key selection, status/output
-secrecy, configuration precedence, public lookup/HTTP APIs, redirect rejection,
+secrecy, configuration precedence, converged public API names, SDK refusal of unknown
+project Vaults after offline token inheritance (before any HTTP request),
+public lookup/HTTP APIs, redirect rejection,
 and Node request deadlines. CLI subprocess tests cover raw token output,
 renewal, caching, SDK-command rejection, strict arguments, empty-token failure,
 and help/version output without loading malformed project configuration.
