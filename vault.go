@@ -41,8 +41,8 @@ func (v *Vauth) vaultURL(path string) string {
 // A JSON payload is sent when non-nil.
 // With expect > 0, another status is returned as *HTTPError.
 func (v *Vauth) Request(method, path, token string, payload any, expect int) (int, []byte, error) {
-	if err := v.checkVault(); err != nil {
-		return 0, nil, err
+	if v.unknownVault {
+		return 0, nil, fmt.Errorf("Unknown vault %s, selected by %s. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.", strings.Trim(v.VaultAddr, "/"), v.RCFile)
 	}
 	var body io.Reader
 	if payload != nil {

@@ -95,12 +95,6 @@ class VauthLogin {
     return VERSION;
   }
 
-  // A project-selected Vault must be known before any HTTP request.
-  _check_vault() {
-    if(!this._safe_vault)
-      throw new Error(`Unknown vault ${normalizeAddr(this.VAULT_ADDR)}, selected by ${this.rc_file}. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.`);
-  }
-
   _token_cache_key() {
     const {ssh_auth, jwt_auth} = this.rc;
     return createHash('sha256').update(JSON.stringify({
@@ -288,7 +282,8 @@ class VauthLogin {
   }
 
   async Request(method, apiPath, token = '', payload = null, expect = 200) {
-    this._check_vault();
+    if(!this._safe_vault)
+      throw new Error(`Unknown vault ${normalizeAddr(this.VAULT_ADDR)}, selected by ${this.rc_file}. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.`);
     const headers = {};
     if(token) headers['X-Vault-Token'] = token;
     if(payload !== null) headers['Content-Type'] = 'application/json';

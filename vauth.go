@@ -175,14 +175,6 @@ func (v *Vauth) debug(format string, args ...any) {
 	}
 }
 
-// checkVault rejects an unknown project-selected Vault before any HTTP request.
-func (v *Vauth) checkVault() error {
-	if v.unknownVault {
-		return fmt.Errorf("Unknown vault %s, selected by %s. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.", strings.Trim(v.VaultAddr, "/"), v.RCFile)
-	}
-	return nil
-}
-
 func (v *Vauth) tokenStatus(operation string, token *token) {
 	validity := "valid indefinitely"
 	if token.TTL != 0 {

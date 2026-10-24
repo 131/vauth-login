@@ -991,16 +991,13 @@ test('npm executable points at the shipped standalone CLI', () => {
 });
 
 
-test('_safe_vault reflects the noninteractive address allowlist', () => {
+test('Request rejects an unknown Vault before URL parsing or payload serialization', async () => {
   const instance = Object.create(Vauth.prototype);
-  instance.VAULT_ADDR = 'https://unknown.example.test';
+  instance.VAULT_ADDR = 'not-a-url';
   instance.rc_file = '/project/.vauthrc';
   instance._safe_vault = false;
-  assert.throws(() => instance._check_vault(), /Unknown vault/);
-  assert.equal(instance._safe_vault, false);
-  instance._safe_vault = true;
-  instance._check_vault();
-  assert.equal(instance._safe_vault, true);
+  const payload = {toJSON() { throw new Error('Payload must not be serialized'); }};
+  await assert.rejects(instance.Request('POST', 'auth/jwt/login', '', payload), /Unknown vault/);
 });
 
 test('CLI rejects SDK commands without sending inherited credentials', async t => {
