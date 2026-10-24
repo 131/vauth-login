@@ -151,28 +151,34 @@ Two independently produced assessments are available:
 | Criterion | Codex (Claude Fable 5.1) | Codex (GPT 6.1) |
 | --- | ---: | ---: |
 | ✨ **Coolness** | 15/20 | 17/20 |
-| Robustness | 12/20 | 13/20 |
+| Robustness | 14/20 | 13/20 |
 | Safety | 13/20 | 12/20 |
 
-Claude assessed the functional source in `b7fba0c`, before metadata-only patch
-versioning. Codex subsequently produced a **new source assessment of released
-commit `5103954` (v1.1.2)** using a prompt prepared by Claude. Both prompts
-identified the public ISC upstream, distribution channels and external-adoption
-context. The Codex assessment is not the previously retained fallback and was
-not an incremental rewrite of either earlier report.
+Claude produced a **fresh independent assessment of `dccf1a6` on October 24,
+2026** (published v1.1.2, clean source). The previous Claude report was replaced
+only after the complete standalone output and its read-command log were
+verified. The host-verified model is `claude-fable-5-1`; the report preserves
+the raw reviewer's response after a separate execution-provenance block.
+Codex's independent assessment of released commit `5103954` (v1.1.2), using a
+Claude-prepared prompt, remains unchanged; no new Codex pass was requested in
+this refresh. Both prompts describe the public ISC upstream, distributions and
+external-user/integration exposure. Scores are each reviewer's own judgments,
+not calibrated for agreement or derived from the other report.
 
-Neither prior assessment was read by the new Codex run. Documentation ranges
-were filtered before output, and the execution log confirmed the exclusion of
-assessment contents. Claude's existing report remains unchanged; no additional
-Claude assessment was requested. The reports retain their own findings, evidence,
-limitations and scores rather than being rewritten into agreement.
+The fresh Claude run excluded prior reports and README audit content before
+reading. It highlights SDK transport calls bypassing the known-Vault guard
+(the CLI path is distinguished), supply-chain/workflow risks, and dependency
+hygiene; several exploitation and CVE claims remain explicitly hypotheses.
+Syntax, ESLint and Go formatting checks succeeded; full Node tests and Go
+checks were blocked by the read-only filesystem. These restrictions are not
+product regressions or successful integration tests. The earlier Codex run
+performed syntax/format checks and bounded in-memory checks, not full
+integration tests either.
 
-Codex reports nine source findings and distinguishes verified observations from
-hypotheses. Its read-only run performed syntax/format checks and bounded in-memory
-checks, not full integration tests. Separate release validation passed all 80
-Node tests on Node 24, ESLint, Go vet/race tests, Windows compilation, and
-Node/Go CLI output comparisons. These separate checks do not change the review
-scores. Neither report constitutes certification or a complete current
+Separate release validation previously passed all 80 Node tests on Node 24,
+ESLint, Go vet/race tests, Windows compilation, and Node/Go CLI output
+comparisons. Those are separate results, not checks repeated by this assessment.
+Neither report constitutes certification or a complete current
 vulnerability-database clearance.
 
 ## Credits
