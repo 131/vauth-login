@@ -1,266 +1,149 @@
-<!-- Host-verified provenance; the standalone reviewer output below is preserved verbatim. -->
+<!-- Host-verified provenance; the raw standalone reviewer output is preserved verbatim below. -->
 
-## Host-verified execution provenance
+## Host-verified release-assessment provenance
 
-- Fresh independent invocation on October 24, 2026, source commit `dccf1a61c6679c3a79fd0fdef154d3d89399de38`, clean working tree.
-- Actual model/provider from the execution header: `claude-fable-5-1` / `claude`, profile `claude`, Codex CLI `0.164.0`. The reviewer's model-visibility disclaimer below does not override this host-verified identity.
-- Session: `01a16ebb-03a6-71d2-9bca-fb2dc1f3f564`; exit status `0`.
-- Exact expanded stdin SHA256: `3cd00dd716d64b3e07abe8f82811017b5418bb0efb9cc18131229e78429a1baa`.
-- Raw standalone report SHA256: `29bcf879c0dd981910ad44d3ed832b85a95149eaa6f571e23916199e10c1c8b9`.
-- Invocation: `codex -p claude exec --ephemeral --sandbox read-only -c 'web_search="disabled"' --output-last-message <raw-report> -`, with the exact expanded prompt supplied through stdin.
-- Exact successful input and command are maintained in `$AGENT_WORKSPACE/users/fleurent/sa/claude-sa-prompt.md`. Scratch input, log and raw output: `/tmp/tasks/FLEURENT-09/sa-vauth-login-20261024T162506Z/` (not durable).
-- Host inspected the logged read commands: prior audit contents and README audit ranges were excluded. All tracked repository files, the other assessment and checked client configuration/catalog files remained byte-identical during review.
-- Host validation covered completeness, provenance, input exclusions and primary source evidence, not certification of every conclusion. Recollection-based CVE and workflow hypotheses remain explicitly unverified.
+- Date: October 24, 2026. Clean functional source commit `41f56c1a8e7effe655e2b6034f934780f99fcdef` on `main`.
+- This snapshot has version 1.1.2; the operator-authorized patch 1.1.3 is prepared after the independent assessments through documentation-only consolidation and metadata-only ppackage versioning. The report is not an audit of downloaded release binaries.
+- Actual model: `claude-fable-5-1`; provider `claude`, profile `claude`, Codex CLI `0.164.0`.
+- Session: `01a16f72-8ad2-7be0-b306-03fbd56b32d0`; exit status `0`.
+- Exact successful expanded stdin SHA256: `b11fc3231da5c0ea5cf7635f64ae27b28ea0fa24cd9b37a51e8d48811463a7dd`.
+- Raw final output SHA256: `d1f074842e05ed750a1c452b536d9c31823586e8d3aae43553bab8839eaf3876`.
+- Invocation: `codex -p claude exec --ephemeral --sandbox read-only -c 'web_search="disabled"' --output-last-message <raw-report> -`, with exact prompt bytes supplied through stdin.
+- Exact successful input, command and provenance are maintained in `$AGENT_WORKSPACE/users/fleurent/sa/claude-sa-prompt.md`. Scratch materials: `/tmp/tasks/FLEURENT-09/release-vauth-login-20261024T194258Z/` (temporary, not durable).
+- The host verified immutable tracked source, both preexisting reports and checked client configuration/catalog files during independent analysis. Logged commands were checked for input exclusions. Models did not receive earlier findings, scores, conversation or task handoffs.
+- Claude prepared Sol's prompt without a source assessment; the host ran its bytes unchanged. Subsequent Claude coordination accepted completeness/exclusion compliance, not the correctness of every finding, and did not rewrite scores or conclusions.
+- Successful Claude review excluded README entirely. An earlier session that saw excluded scores was discarded; neither its input history nor diagnostics entered this fresh source review.
+- Source and client files stayed byte-identical. Claude wrote temporary compiler caches, build artifacts and a fake home under `/dev/shm`; its broad "no files modified" wording must be read as no repository/client edits, not an absence of scratch writes. `GOFLAGS=-mod=mod` was used, but the host verified go.mod/go.sum remained unchanged.
+- Claude successfully ran offline vet and Linux/Windows compilation checks. Go tests failed on socket restrictions; Node socket probing demonstrated blocked loopback access, but a full npm test invocation is not evidenced. Its report's "attempted npm test" wording overstates the logged check. No complete integration suite is claimed for this review.
+- Full local release validation is separate from the reviewers' checks. This report does not certify production settings, current advisory status, artifact identity, or absence of vulnerabilities.
 
 ---
 
-# Security Advisory — vauth-login (independent analysis)
+I have everything needed. Below is the complete standalone advisory.
+
+---
+
+# Security Advisory — vauth-login (Node SDK/CLI + Go module/CLI)
 
 | Field | Value |
-|---|---|
-| Target | `/var/monolith/3rd/github.com/131/vauth-login` (upstream `git@github.com:131/vauth-login.git`) |
-| Branch / commit | `main` @ `dccf1a61c6679c3a79fd0fdef154d3d89399de38`, clean working tree (`git status --porcelain` empty; no uncommitted tracked changes to include) |
-| Version under review | npm `vauth-login@1.1.2`, Go module `github.com/131/vauth-login` (`go.mod` `// version: 1.1.2`), GitHub Release v1.1.2 (already published) |
-| Date | 2026-10-24 (Europe/Paris) |
-| Reviewer | Claude (Anthropic) running in the Codex agent harness; the exact model version string is not exposed to this session |
-| License | ISC (confirmed in `LICENSE`) |
-| Mode | Independent analysis phase only — no comparison/consolidation, no edits, no publication, no real Vault/credential access |
+| --- | --- |
+| Target | `/var/monolith/3rd/github.com/131/vauth-login` — upstream `https://github.com/131/vauth-login` (public, ISC) |
+| Source commit | `41f56c1a8e7effe655e2b6034f934780f99fcdef`, branch `main`, working tree clean (`git status --porcelain` empty — no uncommitted tracked changes to include) |
+| Manifest version | 1.1.2 (`package.json`, `go.mod` comment); pending PATCH 1.1.3 not yet versioned |
+| Assessment date | 2026-10-24 (Europe/Paris) |
+| Reviewer | Claude (Anthropic), executed through the Codex CLI agent harness; the exact model variant is not exposed to this session |
+| Mode | Independent, read-only, source-only; no network, no credentials, no real Vault, no edits, no publication |
 
----
+## 1. Scope and distribution context
 
-## 1. Scope and input selection
+Assessed as a **public** project with four external surfaces: public GitHub source, the `vauth-login` npm package (SDK `index.js` + CLI `bin/vauth-login.js`), the Go module `github.com/131/vauth-login` (library + `cmd/vauth-login`), and GitHub Release binaries (Linux amd64, Windows amd64 Authenticode-signed, `SHA256SUMS`). Integrators (including the announced `vvauth` consumer) call `Connect`, `LookupSelf`, `Request`. The threat model therefore includes untrusted project directories (`./.vauthrc`, `./package.json`), hostile networks, a malicious or compromised Vault endpoint, and supply-chain compromise of the release pipeline — not only trusted local usage.
 
-### 1.1 Inventory (tracked + untracked, excluding `.git/`, `node_modules/`)
+## 2. Input inventory and exclusions
 
-```
-.eslintignore  .eslintrc  .gitignore  LICENSE  README.md  API_and_tests.md
-.github/workflows/{publish-npm.yml, release.yml, test.yml}  .goreleaser.yaml
-index.js  bin/vauth-login.js  test/token-cache.js  package.json  package-lock.json (untracked, gitignored)
-vauth.go  vault.go  cache.go  rc.go  humandiff.go  vauth_test.go  auth_api_test.go
-cmd/vauth-login/main.go  cmd/vauth-login/main_test.go  go.mod  go.sum
-SECURITY_AUDIT_fable-5.1.md   ← EXCLUDED
-SECURITY_AUDIT_gpt-6.1-sol.md ← EXCLUDED
-```
+Filenames were inventoried first (`git ls-files`, `find`), then inputs were selected explicitly.
 
-### 1.2 Explicitly selected inputs
-- Node: `index.js`, `bin/vauth-login.js`, `test/token-cache.js`, `package.json`, local `package-lock.json`, `.eslintrc`, `.eslintignore`, `.gitignore`
-- Go: `vauth.go`, `vault.go`, `cache.go`, `rc.go`, `humandiff.go`, `cmd/vauth-login/main.go`, test files (names/coverage only), `go.mod`, `go.sum`
-- Release: `.github/workflows/*.yml`, `.goreleaser.yaml`
-- Docs: `API_and_tests.md` (whole; no audit section), `README.md` **lines 1–144 and 178–186 only** (the `## Security audit` section, lines 145–177, was identified from the heading list and never read), `LICENSE`
-- Explicitly selected dependency sources (no recursion into dependency docs): `node_modules/ssh-agent-crypt/index.js`, `node_modules/nyks/http/request.js`, `node_modules/nyks/string/replaceEnv.js`, `node_modules/nyks/object/{walk,jqdive}.js`, `node_modules/ssh2/lib/agent.js` (sign flags only), `$GOMODCACHE/github.com/131/ssh-agent-crypt@v1.4.1/{sshagentcrypt.go,agent_windows.go}` (function signatures / crypto core via grep + two short excerpts)
+**Read (implementation / tests / manifests / workflows):** `index.js`, `bin/vauth-login.js`, `test/token-cache.js` (test titles + fixture + selected tests), `package.json`, `.eslintrc`, `.eslintignore`, `.gitignore`, `vauth.go`, `vault.go`, `rc.go`, `cache.go`, `humandiff.go`, `cmd/vauth-login/main.go`, test function names in `vauth_test.go`, `auth_api_test.go`, `cmd/vauth-login/main_test.go`, `go.mod`, `go.sum`, `.github/workflows/{test,release,publish-npm}.yml`, `.goreleaser.yaml`, `LICENSE`, `package-lock.json` (untracked; metadata only).
+**Documentation:** `API_and_tests.md` — headings listed first (`API and tests / Shared public API / Node / Go / CLI contract / Verification`); all sections are API/test documentation, none are assessment sections; read in full. No audit content was encountered.
+**Dependency sources (explicitly selected, code only):** `node_modules/nyks/http/request.js`, `node_modules/nyks/string/replaceEnv.js`, `node_modules/nyks/object/walk.js`, `node_modules/ssh-agent-crypt/index.js`, `$GOMODCACHE/github.com/131/ssh-agent-crypt@v1.4.1/{agent_unix.go,sshagentcrypt.go}` (selected functions), `node_modules/ssh2/lib/agent.js` (grep for agent transport names only).
+**Instruction files:** `$AGENT_WORKSPACE/AGENTS.md`, `$AGENT_WORKSPACE/monolith/AGENTS.md` (the target is an unmapped external checkout; no neighbor rules borrowed; no project-level AGENTS/STYLE/`.vauthrc`/`.ai/memory` exists).
 
-### 1.3 Excluded-input statement
-- `SECURITY_AUDIT_fable-5.1.md`, `SECURITY_AUDIT_gpt-6.1-sol.md` (repo root) and the two same-named files inside the `ssh-agent-crypt` Go module cache were **never opened, grepped, or diffed**. Grep commands over tracked files filtered them by name.
-- README `## Security audit` section excluded by line range before output.
-- No personal workspace tasks/indexes/`sa/` files, no prior advisories, no Git history beyond `git rev-parse HEAD` / `git branch` / `git remote -v` / `git status` / `git ls-files`.
-- No audit content entered the input; the run is valid.
+**Excluded from every read, search and diff:** `README.md` (all depths, including the copy under `node_modules/ssh-agent-crypt`), `SECURITY_AUDIT_fable-5.1.md`, `SECURITY_AUDIT_gpt-6.1-sol.md` (repo root and the identically named files inside the `ssh-agent-crypt` module cache), all dependency Markdown, Git history beyond `HEAD` identity, personal task/README/sa materials, and any prior assessment output. No documentation-wide keyword searches were run. **Exclusion status: maintained** — no excluded content entered the input.
 
-### 1.4 Method
-Manual code review of both implementations side by side (Node ↔ Go parity), threat modelling against the documented trust model (inherited token → cache → login; project `./.vauthrc` vs user `~/.vauthrc`), review of release/publish workflows and dependency pins, verification of the cryptographic cache format in the dependency source, and the safe local checks listed in §5. No web access, no live vulnerability database — CVE references below are from reviewer memory and marked as such.
+## 3. Method and checks
 
----
+- Manual code review of authentication flow, configuration loading/trust, token cache cryptography and file handling, HTTP transport, CLI argument handling, manifests and release/publish workflows; cross-language parity review.
+- **Run:** `npx eslint .` (pass), `gofmt -l .` (clean), `go vet ./...` (pass, with `GOCACHE`/`TMPDIR` redirected to `/dev/shm`), `go build ./cmd/vauth-login` for linux/amd64 and `GOOS=windows GOARCH=amd64` (both pass).
+- **Attempted, blocked by sandbox:** `go test ./...` and `npm test` — the sandbox forbids socket creation (`listen tcp6 [::1]:0: socket: operation not permitted`; Node loopback `listen` → `EPERM`; `ssh-agent` needs a Unix socket). Test suites were reviewed statically, not executed.
+- **Not run (no network):** `npm audit`, `govulncheck`, Dependabot/advisory lookups, npm/GitHub API verification. **No live vulnerability-database scanning was performed**; dependency remarks come from reviewer memory and are labelled as such.
+- Toolchain observed locally: Node v22.22.2, Go 1.24.0; CI uses Node 24.x and `go.mod` (`go 1.22`).
 
-## 2. Threat model (as derived from code and docs)
+## 4. Findings (prioritized)
 
-- **Assets**: Vault bearer tokens (inherited `VAULT_TOKEN`, cached token, freshly issued token), the user's SSH agent signing capability, JWTs supplied via env, the release signing server secret, npm trusted-publishing identity.
-- **Trust boundaries**: (a) a *project* `./.vauthrc` from a cloned repository is semi-trusted — it may choose auth path/role/JWT macros but may only target a Vault vouched for by `~/.vauthrc`/`VAULT_ADDR`; (b) the SSH agent socket owner can decrypt caches (documented); (c) the GitHub Actions pipeline is trusted to produce binaries/packages consumed by external integrators (vvauth pending).
-- **Exposure**: public source and packages; CLI used in developer shells and CI; SDK embedded by third parties.
+Severity reflects public-distribution exposure. **Verified** = confirmed in code/configuration; **Hypothesis** = plausible but not demonstrated here.
 
----
+### F1 — `publish-npm` workflow uses an unfilterable `create` trigger (Medium, Verified by GitHub Actions semantics)
+- **Evidence:** `.github/workflows/publish-npm.yml:2-5` (`on: create: tags: ['v*']`), `:7-9` (`id-token: write`), `:28` (`npm publish`), no `environment:` (compare `release.yml:13`).
+- **Impact:** The `create` event supports neither activity types nor `branches`/`tags` filters; the filter is ignored, so this workflow — which holds the OIDC publishing identity — runs on **every branch or tag creation**. A branch created with a bumped, not-yet-published `package.json` version publishes to npm without passing through the protected `production` environment used for binaries. The operator context indicates 1.1.2 was published through this pipeline, consistent with the filter being silently ignored.
+- **Fix:** Switch to `on: push: tags: ['v*']`, add `environment: production`, publish with `npm publish --provenance --access public`, and guard that the tag equals `v${package.json.version}`.
 
-## 3. Findings (prioritized)
+### F2 — Release and publish pipelines build from unpinned npm dependencies; no lockfile is tracked (Medium, Verified)
+- **Evidence:** `.gitignore` ignores `package-lock.json`; `git ls-files` contains no lockfile; `publish-npm.yml:23` and `test.yml:18` run `npm install` (not `npm ci`), executing lifecycle scripts of whatever `^` range resolves at build time (`package.json:15-30`).
+- **Impact:** Non-reproducible release validation and a supply-chain window: a compromised transitive dependency (dev or runtime) executes in the job that publishes to npm. Consumers also receive floating runtime ranges, which is normal for libraries, but the *release job itself* should be deterministic.
+- **Fix:** Track `package-lock.json`, use `npm ci --ignore-scripts` in CI, and consider `overrides`/Dependabot (no `.github/dependabot.yml` exists — verified by inventory).
 
-Severity legend: **High / Medium / Low / Info**. "Verified" = confirmed by code reading or local check; "Hypothesis" = plausible, not confirmed in this environment.
+### F3 — Transport accepts plaintext `http://` Vault addresses; secrets would transit in clear (Medium, Verified; exploitation requires misconfiguration)
+- **Evidence:** Node `index.js:286-301` builds the URL from `VAULT_ADDR` and lets nyks choose `http` vs `https` by scheme (`nyks/http/request.js:63`); Go `vault.go:36-65` performs `http.NewRequest` on any scheme. No scheme check anywhere; the allowlist (`index.js:85-89`, `rc.go:263-282`) compares strings only.
+- **Impact:** `X-Vault-Token`, JWTs (`jwt_auth.jwt`) and SSH challenge signatures are sent over the configured scheme; with `http://` an on-path attacker captures bearer secrets and can also act as the Vault (see F4). Public users copying examples with `http://` would get no warning.
+- **Fix:** Refuse non-`https` origins unless the host is loopback or an explicit `allow_insecure: true` is set; document `NODE_EXTRA_CA_CERTS`/`SSL_CERT_FILE` for private CAs so users are not tempted to disable TLS verification.
 
-### F1 — SDK transport bypasses the known-Vault guard; inherited token can be sent to a project-selected unknown Vault — **Medium→High for SDK integrators** (Verified in code; impact contextual)
+### F4 — SSH login blindly signs a server-supplied nonce with the user's agent key (Medium design weakness; exploitability Hypothesis)
+- **Evidence:** Node `index.js:247-254`: the nonce is any non-empty string, signed raw with `agent.sign(pubKey, Buffer.from(nonce), {})`; Go `vault.go:134-150`: `client.Sign(key, []byte(nonce))` after an empty-string check only.
+- **Impact:** Whoever answers `auth/<path>/nonce` (malicious/compromised Vault, or a MITM under F3) obtains a signing oracle over arbitrary UTF-8-valid byte strings with every key in the agent — including keys unrelated to Vault. Forging SSH userauth or SSHSIG blobs requires attacker-chosen or luckily UTF-8-valid hash bytes, so practical abuse is constrained but not excluded; the agent prompts nothing because no namespace/confirmation is involved. For RSA keys the default agent flags yield `ssh-rsa` (SHA-1) signatures (hypothesis, depends on agent and the custom server plugin).
+- **Fix:** Validate the nonce charset/length client-side (e.g., `^[A-Za-z0-9+/=_-]{16,256}$`) so only printable, non-structured data is ever signed; longer term, sign an SSHSIG-style namespaced envelope (server-side change) and request `rsa-sha2-512` for RSA keys.
 
-**Evidence**
-- `index.js:103-106` `_check_vault()` is called only from `connect()` (`index.js:191`, `index.js:209`).
-- `index.js:288-290` `lookupSelf(token = this.VAULT_TOKEN)` and `index.js:304-319` `request()` build the URL from `this.VAULT_ADDR` (`index.js:300-302`), which is the project `./.vauthrc` `vault_addr` (`index.js:79`), with **no** `_safe_vault` check.
-- Go mirror: `vault.go:174-198` `lookupToken`, `vault.go:209-214` `VaultURL`/`Request`, `vault.go:226-232` `LookupSelf` — `checkVault()` is only invoked in `vauth.go:230,250`.
-- `index.js:80` / `vauth.go:154`: `VAULT_TOKEN` from the environment is loaded into the client unconditionally.
-- Test coverage gap: `test/token-cache.js:1011-1030` ("SDK commands cannot send inherited credentials to an unknown project Vault") only asserts that the **CLI rejects** `lookupSelf`/`request` as arguments; no test exercises the SDK methods themselves with `_safe_vault === false`.
+### F5 — Release artifacts: mutable third-party ref executes with signing credentials; Linux binary and checksums unsigned (Medium-Low, Verified)
+- **Evidence:** `release.yml:22-26` checks out `131/gh-actions` at mutable `ref: v1` and `.goreleaser.yaml:19` runs `.gh-actions/sign-binaries/sign` with `SIGNING_SERVER` (`release.yml:33`) under `contents: write`. Only the Windows build has a signing hook; no `signs:` or `sboms:` sections; actions pinned by major tag only.
+- **Impact:** A compromise or force-push of `131/gh-actions@v1` controls code executing with the release token and signing-server access. Linux users and `SHA256SUMS` consumers can only verify integrity against the same GitHub channel, not authenticity.
+- **Fix:** Pin `131/gh-actions` and all actions to commit SHAs; add goreleaser `signs` (cosign keyless via `id-token: write`) for `SHA256SUMS` and `sboms`; set `mod_timestamp` for reproducibility.
 
-**Impact**
-An SDK consumer (the documented pattern in `API_and_tests.md` lines 5–13: `connect()` then `lookupSelf()`/`request()`) running in a directory containing an attacker-supplied `./.vauthrc` (`vault_addr: https://attacker.example`) will: receive the inherited token from `connect()` (correct, offline), then **POST/GET it as `X-Vault-Token` to the attacker's host** via `lookupSelf()`/`request()`. The CLI is not affected. The upcoming vvauth integration is precisely such a consumer, so this is the most relevant finding for the announced scope.
+### F6 — `go vet ./...` / `go test ./...` in the publish job include Go code shipped inside `node_modules` (Low, Verified locally)
+- **Evidence:** `publish-npm.yml:23-27` runs `npm install` before the Go steps; locally `go test ./...` enumerated `github.com/131/vauth-login/node_modules/flatted/golang/pkg/flatted`.
+- **Impact:** Third-party Go code from npm packages is compiled/vetted in the release pipeline; a vet failure or test in such code can block or confuse releases; it expands the code executed under the publishing identity.
+- **Fix:** Run Go steps before `npm install`, or `go vet $(go list ./... | grep -v /node_modules/)`, or build only `. ./cmd/...`.
 
-**Fix**
-- Enforce `_check_vault()` / `checkVault()` inside `request()` (Node) and `request()` (Go) whenever the client is in the unknown-Vault state — at minimum whenever a token header is attached. Offer an explicit, named opt-out for embedders that supply `VaultAddr` programmatically.
-- Add SDK-level tests: `new VauthLogin()` in a project with unknown `vault_addr`, `VAULT_TOKEN` set → `lookupSelf()`/`request()` must reject before any socket is opened.
-- Document in `API_and_tests.md` that transport calls are guarded.
+### F7 — Project `package.json` version pin can refuse to run on non-range specifiers (Low robustness, Verified)
+- **Evidence:** `index.js:61-66` throws (a **string**, not an `Error`) when `semver.satisfies(VERSION, required)` is false; a git/`file:`/`workspace:` specifier never satisfies. Go `vauth.go:85-88` returns "Invalid … version requirement" for the same inputs.
+- **Impact:** Integrators that depend on `vauth-login` via a git URL or local path (plausible for `vvauth` during development) make both CLIs and the Node constructor fail in their project directory. A malformed `./package.json` also crashes the Node constructor with a raw `SyntaxError` (`index.js:63`).
+- **Fix:** Skip the check unless `semver.validRange(required)` (Node) / `NewConstraint` succeeds (Go); wrap JSON errors; throw `Error` instances.
 
-### F2 — Release pipeline executes a mutable third-party ref and unpinned actions with the signing secret — **Medium** (Verified)
+### F8 — Macro expansion in project-level `.vauthrc` can read and transmit arbitrary environment variables (Low, Verified; mitigated by vault allowlist)
+- **Evidence:** `index.js:40-43` with `nyks/string/replaceEnv.js:7-26` expands `$${env.NAME}` and even `$${env}` (object substitution, line 16-17) in any of the five keys; Go `rc.go:130-155, 306-308` expands string scalars. `jwt_auth.jwt` and `.path` are sent in the login body (`index.js:208-209, 278-279`; `vauth.go:251-256`).
+- **Impact:** A malicious repository's `./.vauthrc` can post selected environment secrets (or, in Node, the entire environment object) to `auth/<attacker-chosen path>/login` on the user's **own** trusted Vault, where request bodies reach audit devices (HMAC'd). Exfiltration to a foreign Vault is blocked by the `known_vaults` check (`index.js:85-89,99-102`; `vauth.go:139-141,179-184`). Node's `str.replace(match[0], v)` additionally interprets `$&`/`$'` in env values (robustness divergence from Go), and Node has no recursion depth limit (Go: 16).
+- **Fix:** Restrict macro expansion in a *project* file to a documented allow-list (`env.VAULT_ADDR`, `env.VAUTH_*`), reject object substitution, use a literal replacer, cap recursion.
 
-**Evidence**
-- `.github/workflows/release.yml:22-26` checks out `131/gh-actions` at `ref: v1` (mutable tag/branch) into `.gh-actions`.
-- `.goreleaser.yaml:18-19` post-build hook executes `.gh-actions/sign-binaries/sign {{ .Path }}` with `SIGNING_SERVER: ${{ secrets.SIGNING_SERVER }}` (`release.yml:33`) and `contents: write` (`release.yml:8`).
-- All actions pinned by major tag only: `actions/checkout@v4`, `actions/setup-go@v5`, `actions/setup-node@v4`, `goreleaser/goreleaser-action@v6` (`release.yml`, `publish-npm.yml`, `test.yml`).
+### F9 — No vulnerability scanning, EOL dev dependencies, aging crypto dependency (Low, Verified presence; CVE details from memory)
+- **Evidence:** `package.json:24-30` keeps unused `mocha ^3.1.2` (installed 3.5.3 → `growl 1.9.2`), `expect.js`, `nyc` while tests use `node:test`; `eslint 8.57.1` (EOL); `go.mod` pins `golang.org/x/crypto v0.31.0`. No `npm audit`, `govulncheck`, CodeQL or Dependabot in `.github/`.
+- **Impact:** From memory: `growl < 1.10` has a command-injection advisory (dev-only, not shipped); `x/crypto v0.31.0` predates 2025 `ssh` package advisories (server-side DoS, likely not reachable from agent-client code — hypothesis). Public consumers running `npm audit` will see noise that erodes trust.
+- **Fix:** Remove unused devDependencies; bump `x/crypto`; add `govulncheck` and `npm audit --omit=dev` jobs; add `.github/dependabot.yml`.
 
-**Impact**
-A compromise or force-push of `131/gh-actions@v1` (or of any upstream action tag) yields arbitrary code execution inside the `production` environment job: exfiltration of `SIGNING_SERVER`, substitution of binaries *before* Authenticode signing and checksum generation, i.e. signed malicious Windows releases. External users are told to trust the signature and `SHA256SUMS` (README lines 33–36).
+### F10 — Hygiene for public adoption (Low, Verified)
+- No `SECURITY.md`/disclosure policy; no `engines` field in `package.json` although `Object.hasOwn` (`index.js:42`) requires Node ≥16.9 and `fs.rmSync` in tests ≥14.14; `repository.url` is an SSH URL (`git@github.com:…`) — npm provenance matching normally normalizes it, but verify before relying on `--provenance` (hypothesis); `author` empty.
+- Node SDK always prints status lines to `stderr` via `console.error` (`index.js:149-153,162,174`) with no override (Go exposes `Stderr`), and `_login_vault_ssh` swallows all per-key login errors into a generic string throw (`index.js:255-264`), hiding TLS/5xx root causes.
+- Go `Vauth` is not goroutine-safe (`connected` flag, `vauth.go:51`); a caller-supplied `HTTPClient` loses the redirect block (`vault.go:80-90`) and Go copies `X-Vault-Token` across cross-host redirects (hypothesis on stdlib header policy). Response bodies are read unbounded (`vault.go:70`, `index.js:302`).
 
-**Fix**
-- Pin `131/gh-actions` and all actions to full commit SHAs (with a comment giving the tag); enable Dependabot `github-actions` updates.
-- Have the signing script verify the artifact it receives (e.g., compare to the checksum computed by the goreleaser build step) and make the signing server reject unexpected callers.
-- Optionally compute `SHA256SUMS` *before* the signing hook and publish both pre- and post-sign hashes.
+## 5. Strengths (verified)
 
-### F3 — Go release/test toolchain is end-of-life and dependencies are stale — **Medium** (Config verified; exact toolchain is a hypothesis)
-
-**Evidence**
-- `go.mod:5` `go 1.22`, no `toolchain` directive. `release.yml:18-20`, `test.yml:31-33`, `publish-npm.yml:20-22` use `go-version-file: go.mod`, which resolves to the newest **1.22.x** patch. Go 1.22 left support when Go 1.24 shipped (Feb 2025); the v1.1.2 binaries (Oct 2026) were therefore most likely compiled with a standard library (`net/http`, `crypto/tls`, `encoding/json`, `os`) ~20 months behind security fixes.
-- `go.mod:8-10` `golang.org/x/crypto v0.31.0`, `golang.org/x/sys v0.28.0` (Dec 2024 era). From memory: the `x/crypto/ssh` package received further fixes after v0.31.0 (e.g., CVE-2025-22869, fixed ≈ v0.35.0). vauth-login only uses the `ssh/agent` client and `ssh` key parsing, so practical exposure is probably low — **hypothesis, no live DB scan**.
-- No `govulncheck` step in any workflow.
-
-**Fix**
-- Bump `go` directive to a supported minor (and add `toolchain goX.Y.Z`), `go get -u ./... && go mod tidy`, rebuild/retag.
-- Add `golang/govulncheck-action` (SHA-pinned) to `test.yml` and `release.yml`; add Dependabot for `gomod`.
-
-### F4 — npm publish job installs unpinned dependencies with lifecycle scripts under an OIDC-capable job — **Medium** (Verified)
-
-**Evidence**
-- `.gitignore:2` ignores `package-lock.json`; `git ls-files --error-unmatch package-lock.json` → not tracked. Both `test.yml:18` and `publish-npm.yml:23` run `npm install` (not `npm ci`), so every CI/publish run resolves fresh versions for `^` ranges (`package.json:14-22`).
-- `publish-npm.yml:7-9` grants `id-token: write` to the **same job** that runs `npm install`, `npm test`, `go test`; the `ACTIONS_ID_TOKEN_REQUEST_*` variables are available to every dependency install script and test process in that job.
-- Unused, very old devDependencies are installed: `mocha@^3.1.2` (resolved 3.5.3, 2017), `expect.js`, `nyc` — `grep -c "mocha|expect.js|nyc" test/token-cache.js` → 0 (tests use `node:test`). The lockfile shows transitive `growl@1.9.2` and `diff@3.2.0` (from memory: CVE-2017-16042 command injection; ReDoS fixed in diff 3.5.0) — only reachable through mocha, not shipped, but present in the publish environment.
-
-**Impact**
-A malicious or compromised minor release of any of ~7 runtime or ~5 dev dependency trees can run code in the publish job, mint the OIDC token, and publish a trojaned `vauth-login` to npm via trusted publishing — reaching all external integrators. Builds are also non-reproducible.
-
-**Fix**
-- Commit `package-lock.json` (or a `npm-shrinkwrap`-style lock for CI only) and switch to `npm ci --ignore-scripts`.
-- Remove unused dev dependencies (`mocha`, `expect.js`, `nyc`).
-- Split `publish-npm.yml` into a test job (no `id-token`) and a publish job with `id-token: write` only, `npm ci --ignore-scripts --omit=dev`, and `npm publish --provenance`.
-- Add Dependabot/Renovate for npm.
-
-### F5 — `publish-npm.yml` trigger uses `create` with a `tags` filter that the `create` event does not support — **Medium** (Hypothesis)
-
-**Evidence**: `.github/workflows/publish-npm.yml:2-5`:
-```yaml
-on:
-  create:
-    tags:
-      - 'v*'
-```
-GitHub documents `branches`/`tags` filters for `push`/`pull_request*`, not for `create`. If the filter is ignored, the workflow runs on **every branch creation**; `actions/checkout` then checks out that branch and runs `npm publish`. If a contributor bumps `package.json` `version` on a feature branch and pushes it, an **untagged, unreviewed commit is published** (trusted publishing needs no token). Also, nothing verifies that the Git tag matches `package.json` version or `go.mod`'s `// version:` comment.
-
-**Fix**: use `on: push: tags: ['v*']`, add `if: startsWith(github.ref, 'refs/tags/v')`, and a step asserting `"v$(node -p 'require("./package.json").version')" == "$GITHUB_REF_NAME"`.
-
-### F6 — Linux binary and `SHA256SUMS` carry no signature or provenance attestation — **Low–Medium** (Verified)
-
-**Evidence**: `.goreleaser.yaml:25-26` produces `SHA256SUMS` only; no `signs:` block, no cosign, no `actions/attest-build-provenance`. Only Windows gets Authenticode via the external server (`.goreleaser.yaml:18-19`). README (lines 26–36) tells users to "check the checksum", but the checksum file comes from the same release page, so it only detects transfer corruption, not a compromised release.
-
-**Fix**: add SLSA/GitHub artifact attestations or cosign keyless signing for all artifacts and `SHA256SUMS`; document verification commands.
-
-### F7 — Project `.vauthrc` can exfiltrate arbitrary environment variables to any endpoint of a trusted Vault — **Low** (Verified)
-
-**Evidence**
-- `index.js:40-43` / `rc.go:306-308`: `$${env.NAME}` macros are expanded for **all** rc keys, including project files; nothing restricts which variables a project may read.
-- `index.js:213-215` / `vauth.go:257-262`: `jwt_auth.jwt`, `role`, and `path` are project-controlled and POSTed to `auth/<path>/login`. `path` is concatenated unvalidated (`index.js:293`, `vault.go:110`); `..`, `?`, `#` are accepted, so the request can target other endpoints under `/v1/` of the trusted Vault.
-- The known-Vault guard (F1 context) correctly limits the **destination** to a vouched Vault; this finding is about **payload** control.
-
-**Impact**: a malicious repository can cause `vauth-login` to send e.g. `$${env.AWS_SECRET_ACCESS_KEY}` as the `jwt` field to the organisation's Vault, where it lands in audit logs (HMAC'd by default, raw if audit devices are configured with raw logging) and in any plugin mounted at the chosen path. Requires the user to run the CLI inside the repo; no network redirection.
-
-**Fix**: validate `path` against `^[A-Za-z0-9_./-]+$` without `..`; restrict macros in a *project* rc to an allowlist (e.g., only `VAULT_*`/`LOGIN_JWT`-style names) or require `jwt_auth` with macros to come from `~/.vauthrc`/`VAUTHRC`; document.
-
-### F8 — SSH nonce is signed raw with default agent flags (SHA-1 for RSA) and no domain separation — **Low** (Verified; exploitation hypothesis)
-
-**Evidence**: `index.js:262` `agent.sign(pubKey, Buffer.from(nonce), {}, …)` → ssh2 sends `flags = 0` (`node_modules/ssh2/lib/agent.js:778-818`), i.e. `ssh-rsa`/SHA-1 for RSA keys; `vault.go:153` `client.Sign(key, nonce)` likewise (contrast `ssh-agent-crypt` which uses `SignatureFlagRsaSha512`, `sshagentcrypt.go:121-126`). The signed bytes are exactly the server-chosen string.
-
-**Impact**: a compromised *known* Vault obtains a signature oracle over attacker-chosen (UTF-8-valid) bytes with the user's SSH key. Real SSH userauth transcripts contain random binary session IDs that rarely form valid UTF-8, so practical misuse is limited; SHA-1 RSA signatures are deprecated but not practically forgeable here.
-
-**Fix**: request `rsa-sha2-256/512` flags; coordinate with the Vault SSH plugin to sign a domain-separated digest (e.g., `SSHSIG`-style envelope with a `vauth-login` namespace, as `ssh-agent-crypt` already does).
-
-### F9 — Token cache hygiene: JWT value inside the cache key, no eviction, directory permissions only on creation — **Low** (Verified)
-
-**Evidence**
-- `index.js:108-113` and `rc.go:42` + `cache.go:25-32`: the expanded `jwt` **value** is hashed into the file name. Each new JWT (OIDC tokens rotate per job/session) produces a new `~/.vauth/tokens/<sha256>.creds` file holding a still-valid, encrypted Vault token; nothing ever deletes old entries (only the temp file is unlinked, `index.js:149`, `cache.go:79`).
-- `index.js:140` / `cache.go:72`: `mode 0700` applies only if the directory is created; pre-existing `~/.vauth` keeps its mode.
-
-**Impact**: accumulation of long-lived encrypted bearer tokens on disk; decryptable by anyone controlling the agent (documented). A SHA-256 of structured JSON containing the JWT is not reversible for a signed JWT, so disclosure risk is negligible.
-
-**Fix**: key on `(vault_addr, path, role)` plus a hash of the JWT *subject/issuer* rather than the raw token, or omit the JWT; prune files whose plaintext `expires_at` has passed (or older than N days by mtime); `chmod 0700` the directory on each write.
-
-### F10 — Windows Go client keeps the cache enabled when no agent pipe exists → noisy failure every run — **Low** (Verified)
-
-**Evidence**: `agent_windows.go:29-37` `DefaultAgentAddress()` returns `\\.\pipe\openssh-ssh-agent` unconditionally when neither `SSH_AUTH_SOCK` nor Pageant is present; `vauth.go:122,147-149` only disables `TokenCache` when `Agent == ""`. Result: `readTokenCache` fails silently, `saveTokenCache` prints "Could not encrypt/write token cache; token not persisted" (`cache.go:87`) on every JWT login. Node disables the cache without `SSH_AUTH_SOCK` only on non-Windows (`index.js:76-77`).
-
-**Fix**: probe the pipe (`pipeExists`) before enabling the cache, or treat `DialAgent` failure as "cache disabled" silently.
-
-### F11 — Miscellaneous hardening gaps — **Low / Info** (Verified)
-
-| # | Item | Evidence | Fix |
-|---|---|---|---|
-| a | Plaintext `http://` Vault addresses accepted without warning | `index.js:300-313`, `vault.go:43-45` | Warn/refuse non-loopback `http://` |
-| b | Node request timeout starts only after the request is fully sent; connect/TLS stalls fall back to OS TCP timeout | `node_modules/nyks/http/request.js:111-120`; `index.js:312` | Set `timeout` on the socket / use `AbortSignal.timeout` |
-| c | Node imports ssh2 internal module `ssh2/lib/agent` (not public API) | `index.js:22` | Pin ssh2 minor or vendor a thin agent client |
-| d | Node `replaceEnv` recursion is unbounded (Go caps at 16, `rc.go:135`) — self-referencing env value → stack overflow | `node_modules/nyks/string/replaceEnv.js:23-24` | Depth-limit in `loadRC` |
-| e | No `SECURITY.md`/disclosure policy, no Dependabot/Renovate config, no `engines` field (code needs Node ≥16.9 for `Object.hasOwn`, `randomUUID`) | repo root, `package.json` | Add them |
-| f | `package.json` `repository.url` is SSH form (`git@github.com:…`) — provenance tooling prefers `https://github.com/131/vauth-login.git` | `package.json:30-33` | Normalize |
-| g | Version pin check reads `./package.json` in cwd and fails closed on non-semver ranges (`"latest"`, git URLs) | `index.js:61-67`, `vauth.go:66-93` | Accept/ignore non-semver specifiers |
-| h | Documented quick-start `export VAULT_TOKEN=$(vauth-login)` masks the non-zero exit status (sets an empty variable on failure) | README lines 9–13 | Document `VAULT_TOKEN=$(vauth-login) || exit 1` or `set -o pipefail`-style patterns |
-| i | Unbounded `io.ReadAll` / `drain` of Vault responses | `vault.go:73`, `index.js:315` | Cap body size (e.g., 1 MiB) |
-
----
-
-## 4. Strengths (verified)
-
-- **Fail-closed, non-interactive Vault allowlist** for project-selected addresses (`index.js:82-89`, `rc.go:263-282`), with exact string matching (no fuzzy normalization that could be spoofed) and good test coverage (`test/token-cache.js:642-713`, Go `TestUnknownVaultRejected`).
-- **Inherited `VAULT_TOKEN` never leaves the process in the CLI path** (`index.js:165-169`, `vauth.go:203-207`); tests assert no network and no stderr leakage.
-- **Encrypted + authenticated cache** (`ssh-agent-crypt` v3: AES-256-CBC + HMAC-SHA256 over prefix+payload, keys derived from a namespaced `SSHSIG` signature, constant-time MAC compare, PKCS#7 checks) — verified in dependency source; plaintext caches are rejected (`TestPlaintextCacheNotAccepted`).
-- **Atomic, private cache writes**: `wx` + `0600` + random temp name + `rename` (`index.js:140-149`, `cache.go:72-111`); cache failures never block login nor print secrets.
-- **Transport hygiene**: redirects not followed in either implementation (`vault.go:85`, nyks default), TLS verification at platform defaults, 60 s deadlines, strict response-shape validation (`index.js:236,259,281,295`, `vault.go:95-107,187-192`), `HTTPError` hides bodies from logs (`index.js:50`, `vault.go:24-26`).
-- **Strict CLI contract** (`bin/vauth-login.js:7-9`, `main.go:38-49`): unknown flags rejected before any config/credential access; `--help/--version` load nothing; raw token on stdout, status on stderr.
-- **No secrets in debug output** (all `logger`/`v.debug` sites reviewed, §5).
-- **Node/Go parity tests** including byte-identical cache keys (`TestTokenCacheKeyMatchesNode`), a loopback fake Vault and throwaway ssh-agent (no real credentials needed).
-- **Supply-chain positives**: npm trusted publishing (OIDC, no long-lived `NPM_TOKEN`), `environment: production` gate on release, least-privilege `permissions:` blocks, `-trimpath -s -w`, `go.sum` present, npm `files` allowlist excludes tests and audit documents, Authenticode signing of Windows binaries.
-
----
-
-## 5. Local checks
-
-| Check | Result |
-|---|---|
-| Inventory / exclusion filtering | Done (§1) |
-| `git rev-parse HEAD`, `git status --porcelain` | `dccf1a61…`, clean |
-| `npm run eslint` (eslint 8.57.1, plugin ivs) | **Pass**, no findings |
-| `node --check index.js bin/vauth-login.js` | **Pass** |
-| `gofmt -l .` | **Clean** (no files listed) |
-| `npm ls --depth=0` vs `package.json` | All declared deps resolvable; `ssh2@1.17.0`, `ssh-agent-crypt@1.4.1`, `nyks@6.15.2`, `yaml@2.9.1`, `semver@7.8.5`, `debug@4.4.3`, `mout@1.2.4`; devDeps `mocha@3.5.3` (unused), `expect.js`, `nyc` |
-| Secret scan over tracked source (Vault/AWS/private-key patterns, audit docs excluded) | **Nothing found** |
-| Debug/log-site review for token leakage | **None** |
-| Dependency crypto review (`ssh-agent-crypt` Node + Go) | Consistent with README claims |
-| `go vet ./...`, `go test ./...`, `go test -race ./...`, `GOOS=windows go build` | **Not run** — sandbox filesystem is fully read-only (`GOCACHE` and `/tmp` unwritable: "read-only file system") |
-| `npm test` (`node --test test/token-cache.js`) | **Not run to completion** — `before` hook fails with `EROFS: mkdtemp '/tmp/vvauth-agent-XXXXXX'` (sandbox limitation, not a code defect) |
-| `npm audit`, `govulncheck`, live CVE lookup, release-binary inspection (`go version -m`) | **Not run** — no network access; CVE mentions are from memory and flagged as hypotheses |
-
----
+- **Encrypted-only token cache**: SSHSIG-derived AES-256-CBC + HMAC-SHA256 (encrypt-then-MAC, constant-time compare) via `ssh-agent-crypt`; plaintext caches rejected; cache disabled without an agent (`index.js:76-77`, `vauth.go:147-149`).
+- **Safe file handling**: directory `0700`, file `0600`, `wx` temp + atomic rename, temp cleanup (`index.js:135-146`; `cache.go:72-110`); cache key isolates by Vault address and auth config and is byte-identical across languages (`TestTokenCacheKeyMatchesNode`).
+- **Destination trust**: a project-selected Vault is refused before any HTTP request unless the user vouches for it in `~/.vauthrc` or `VAULT_ADDR`; no interactive override.
+- **Secret-safe errors**: `HTTPError` messages carry status only; bodies are non-enumerable in Node; CLIs print messages only; tests assert no token leakage.
+- **No redirects** followed in either transport; deadlines on headers and body (Node `reqtimeout`, Go `Timeout`).
+- **Strict CLI contract**: unknown flags rejected before configuration/credential use; `--help/--version` never load config; raw token to stdout only.
+- **Release hygiene already present**: `files` whitelist excludes tests and audit documents from the npm tarball; OIDC trusted publishing (no long-lived npm token); minimal `permissions`; `environment: production` and Authenticode signing for Windows; `-trimpath -s -w`; `go.sum` pinned.
+- **Broad behavioral test coverage** in both languages (≈55 Node tests, ≈45 Go tests) over an isolated ssh-agent and loopback fake Vault.
 
 ## 6. Limitations
 
-- Static review only for Go; dynamic tests blocked by the read-only sandbox.
-- No live vulnerability database; dependency CVE statements are recollection-based hypotheses.
-- Release workflow behavior (F2, F5) and the exact Go toolchain used for v1.1.2 (F3) could not be observed; they are inferred from configuration.
-- The Vault "ssh" auth plugin consuming the nonce/signature is out of scope and was not reviewed; F8's server-side assumptions are hypotheses.
-- Windows behavior (Pageant/OpenSSH pipe) reviewed from source only.
+- Tests could not be executed in this sandbox (no sockets); results rely on static review.
+- No live CVE database, `npm audit`, or `govulncheck`; dependency risk statements are from memory.
+- GitHub/npm settings (trusted-publisher constraints, branch/tag protection, environment reviewers) were not inspectable offline; F1's impact depends on them.
+- The custom Vault SSH auth plugin (`auth/<path>/nonce`) is out of repository scope; server-side verification (algorithms, nonce freshness/binding) was not reviewed.
+- Windows/Pageant paths were only cross-compiled, not executed.
 
----
+## 7. Scores (out of 20)
 
-## 7. Scores
+| Axis | Score | Justification |
+| --- | --- | --- |
+| **Coolness** | **15/20** | Compact dual-language SDK/CLI with an interoperable, agent-derived encrypted cache and byte-identical cache keys; converged minimal API; but console noise in the SDK, string throws and ad-hoc macro semantics reduce polish. |
+| **Robustness** | **13/20** | Strong behavioral tests and careful cache/transport edge handling; penalized by the untracked lockfile and floating CI installs, brittle `package.json` version gate, Node/Go macro-expansion divergences, `node_modules` leaking into `go test ./...`, and non-goroutine-safe client. |
+| **Safety** | **14/20** | Secrets are handled well (encryption at rest, status-only errors, no redirects, destination allowlist, OIDC publishing); held back by accepted plaintext transport, blind nonce signing, the mis-triggering publish workflow, mutable signing-helper ref and unsigned Linux/checksum artifacts, and absent vulnerability scanning. |
 
-| Dimension | Score | Justification |
-|---|---|---|
-| **Coolness** | **15 / 20** | Elegant idea: agent-sealed, byte-compatible token caches shared by a Node and a Go implementation, zero key management, a crisp CLI contract and a well-thought project-vs-user trust split. Loses points for a stale toolchain/dependency posture and the absence of provenance for a tool whose whole purpose is trust. |
-| **Robustness** | **14 / 20** | Strong, behavior-rich test suites in both languages (lease thirds, renewal, corrupt/unwritable caches, parity), strict response validation and atomic writes. Deductions: no lockfile and `npm install` in CI (non-reproducible), EOL Go 1.22 toolchain, unused legacy devDeps, Windows cache noise (F10), internal ssh2 import, unbounded Node macro recursion. |
-| **Safety** | **13 / 20** | The local credential model is sound (inherited token never sent by the CLI, authenticated cache, fail-closed allowlist, no secret logging). The score is held back by F1 — the SDK transport can forward an inherited token to a project-chosen unknown Vault, directly relevant to the pending vvauth integration — and by release-pipeline supply-chain exposure (mutable signing-script ref, unpinned actions, OIDC-capable job running unpinned install scripts, probable mis-triggered publish workflow). |
+## 8. Recommended order of remediation before 1.1.3 goes public
 
----
+1. F1 — fix `publish-npm` trigger, add `environment: production` and provenance.
+2. F2/F6 — commit lockfile, `npm ci --ignore-scripts`, reorder/limit Go steps.
+3. F3/F4 — enforce `https` (loopback exception) and validate nonce charset.
+4. F5 — SHA-pin `131/gh-actions` and actions; sign `SHA256SUMS`, add SBOM.
+5. F7–F10 — version-gate leniency, macro allow-list for project files, drop unused devDependencies, bump `x/crypto`, add `SECURITY.md`, `engines`, Dependabot and `govulncheck`.
 
-## 8. Recommended order of remediation
-
-1. **F1** — guard `request()`/`Request()` with the known-Vault check; add SDK tests (before vvauth integrates).
-2. **F2 + F5** — SHA-pin actions and `131/gh-actions`; fix `publish-npm.yml` trigger and add tag↔version assertion.
-3. **F4** — commit a lockfile, `npm ci --ignore-scripts`, drop unused devDeps, split publish job with minimal permissions, `--provenance`.
-4. **F3** — upgrade Go directive/toolchain and `x/*` modules; add `govulncheck` and Dependabot (npm, gomod, github-actions).
-5. **F6** — attest/sign all release artifacts including `SHA256SUMS`.
-6. **F7–F11** — path/macro validation, rsa-sha2 flags and nonce domain separation, cache eviction and key composition, Windows agent probing, `SECURITY.md`, `engines`, doc tweaks.
-
-*End of advisory — independent analysis phase; no comparison with or consolidation of other assessments was performed.*
+*End of advisory. No files were modified, nothing was published or deployed, and no credentials or real Vault services were accessed.*

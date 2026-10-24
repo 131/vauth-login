@@ -142,57 +142,50 @@ logs, shell traces and plaintext files.
 Node module, Go module, token lifecycle, Vault HTTP transport and the test matrix:
 [API_and_tests.md](API_and_tests.md).
 
+The prototype client API is `Connect`, `LookupSelf`, `Request` in Node and Go.
+Old Node method spellings and exported cache/URL helpers are removed, without
+compatibility aliases; update SDK callers accordingly. The standalone CLI
+contract remains unchanged.
+
 ## Security audit
 
-Two independently produced assessments are available:
+Two fresh independent source assessments accompany the 1.1.3 release:
 [SECURITY_AUDIT_fable-5.1.md](SECURITY_AUDIT_fable-5.1.md) and
 [SECURITY_AUDIT_gpt-6.1-sol.md](SECURITY_AUDIT_gpt-6.1-sol.md).
 
-| Criterion | Codex (Claude Fable 5.1) | Codex (GPT 6.1 Sol) |
+| Criterion | Claude Fable 5.1 | GPT 6.1 Sol |
 | --- | ---: | ---: |
 | ✨ **Coolness** | 15/20 | 17/20 |
-| Robustness | 14/20 | 13/20 |
-| Safety | 13/20 | 11/20 |
+| Robustness | 13/20 | 13/20 |
+| Safety | 14/20 | 13/20 |
 
-Both reports are fresh independent assessments completed on October 24, 2026:
-Claude reviewed clean commit `dccf1a6`; Sol reviewed clean commit `fd0bf4d`
-(published version 1.1.2). The host verified actual models
-`claude-fable-5-1` and `gpt-6.1-sol_codeassist` from execution headers.
-Each report preserves its complete raw reviewer response after a separate
-host-verified provenance block.
+Both were generated on October 24, 2026 from clean functional commit `41f56c1`,
+before documentation-only consolidation and metadata-only ppackage patch
+versioning. The host confirmed models `claude-fable-5-1` and
+`gpt-6.1-sol_codeassist`, exact inputs, source immutability and read exclusions.
+Prior reports, scores and task handoffs were not source-review inputs. An
+invalid Claude attempt was discarded; the successful fresh invocation excluded
+README entirely. Sol read isolated non-assessment documentation ranges.
+Each published report preserves the raw reviewer response after a separate
+host provenance block; check-scope caveats are explicit.
 
-For the Sol refresh, Claude prepared the prompt without another source
-assessment; the host executed the exact input in a fresh ephemeral read-only
-session. Claude then accepted completeness and input exclusions from the new
-run's materials. This coordination was not an independent re-verification of
-all findings. The Claude report remains unchanged.
+The three-method client API and shared HTTP trust guard were assessed as
+implemented. Remaining findings include plaintext HTTP acceptance, mutable
+address/trust state, resource limits, cache validation/isolation and release
+supply-chain controls. Severity and hypotheses remain each reviewer's own
+judgments. Reports and scores were not rewritten for agreement; neither is
+certification or a live vulnerability-database clearance.
 
-Neither source reviewer received earlier reports, findings, scores or task
-handoffs. Documentation ranges were isolated before reading. Reports retain
-their own conclusions and scores, without calibration for agreement. Both assessed snapshots
-identify missing destination-trust enforcement in SDK transport helpers while
-distinguishing the restricted CLI path. The Sol report also examines parser-log
-disclosure, plaintext HTTP acceptance, mutable Go cache identity and publication
-controls. Verified source observations are separated from hypothetical impact
-and hosted behavior; neither report substitutes for a live advisory scan.
+Reviewer checks differ: Sol ran syntax/format/ESLint and bounded offline probes;
+Claude ran syntax/format/ESLint, offline Go vet and Linux/Windows builds using
+scratch compiler files. Neither completed full integration suites under the
+review sandbox. The host provenance distinguishes temporary filesystem writes
+and blocked socket probes from actual suite execution.
 
-The current implementation checks destination trust in the common `Request`
-transport before every HTTP call, covering `LookupSelf`, login and renewal.
-Public Node/Go method names converge without compatibility aliases. These
-post-assessment implementation changes address the reported F1 route; the
-original reports and scores remain frozen to their assessed commits. No new
-security assessment or revised score is implied.
-
-Sol performed syntax/formatting checks and bounded offline in-memory probes;
-Claude performed syntax, ESLint and formatting checks. Neither pass executed
-complete runtime/integration suites under the strict read-only constraints.
-Checks not performed and their reasons are explicit in each report.
-
-Separate release validation previously passed all 80 Node tests on Node 24,
-ESLint, Go vet/race tests, Windows compilation, and Node/Go CLI output
-comparisons. Those are separate results, not checks repeated by these
-assessments. Neither report constitutes certification, release approval or a
-complete current vulnerability-database clearance.
+Separate release validation passes all 81 Node tests on Node 24, ESLint, Go
+vet/race tests, Windows compilation and Node/Go CLI output comparisons. These
+are host validation results, not tests silently attributed to the assessments.
+Published package/binary identity is verified separately during publication.
 
 ## Credits
 
