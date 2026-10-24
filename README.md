@@ -144,8 +144,7 @@ Node module, Go module, token lifecycle, Vault HTTP transport and the test matri
 
 ## Security audit
 
-Two independently produced assessments cover the functional source in commit
-`b7fba0c`, before the metadata-only patch versioning step:
+Two independently produced assessments are available:
 [SECURITY_AUDIT_fable-5.1.md](SECURITY_AUDIT_fable-5.1.md) and
 [SECURITY_AUDIT_gpt-6.1-sol.md](SECURITY_AUDIT_gpt-6.1-sol.md).
 
@@ -155,28 +154,26 @@ Two independently produced assessments cover the functional source in commit
 | Robustness | 12/20 | 13/20 |
 | Safety | 13/20 | 12/20 |
 
-Claude's prompt explicitly announced the public ISC upstream, npm/Go/native
-release channels, and upcoming exposure to external users. The retained GPT
-assessment was completed independently on exactly the same source before that
-prompt refinement. Later GPT attempts, including a second pass with existing
-reports present but excluded from reading, were blocked without a final report.
-Their missing outcomes are not replaced by invented findings or scores.
-The reports retain their respective context and conclusions; they were not
-rewritten to agree.
+Claude assessed the functional source in `b7fba0c`, before metadata-only patch
+versioning. Codex subsequently produced a **new source assessment of released
+commit `5103954` (v1.1.2)** using a prompt prepared by Claude. Both prompts
+identified the public ISC upstream, distribution channels and external-adoption
+context. The Codex assessment is not the previously retained fallback and was
+not an incremental rewrite of either earlier report.
 
-Both identify transport and release reproducibility risks. Claude emphasizes
-server-provided SSH signing inputs, environment/configuration trust boundaries,
-and signing-pipeline exposure. GPT emphasizes plaintext HTTP, unchecked YAML
-traversal, and unbounded HTTP response buffering. Verified source-level findings,
-conditional risks, and unverified external behavior are distinguished in the
-individual reports. Scores are subjective assessments, not certification or a
-complete current vulnerability-database clearance.
+Neither prior assessment was read by the new Codex run. Documentation ranges
+were filtered before output, and the execution log confirmed the exclusion of
+assessment contents. Claude's existing report remains unchanged; no additional
+Claude assessment was requested. The reports retain their own findings, evidence,
+limitations and scores rather than being rewritten into agreement.
 
-Prior reports and embedded score summaries were excluded from the completed
-independent runs. Separate coordinator checks passed all 80 Node tests on
-Node 24, ESLint, Go vet/race tests, Windows compilation, and Node/Go CLI output
-comparisons. Review-only module-cache copies are not part of this repository
-or its published package.
+Codex reports nine source findings and distinguishes verified observations from
+hypotheses. Its read-only run performed syntax/format checks and bounded in-memory
+checks, not full integration tests. Separate release validation passed all 80
+Node tests on Node 24, ESLint, Go vet/race tests, Windows compilation, and
+Node/Go CLI output comparisons. These separate checks do not change the review
+scores. Neither report constitutes certification or a complete current
+vulnerability-database clearance.
 
 ## Credits
 
