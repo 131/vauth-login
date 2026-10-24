@@ -148,38 +148,44 @@ Two independently produced assessments are available:
 [SECURITY_AUDIT_fable-5.1.md](SECURITY_AUDIT_fable-5.1.md) and
 [SECURITY_AUDIT_gpt-6.1-sol.md](SECURITY_AUDIT_gpt-6.1-sol.md).
 
-| Criterion | Codex (Claude Fable 5.1) | Codex (GPT 6.1) |
+| Criterion | Codex (Claude Fable 5.1) | Codex (GPT 6.1 Sol) |
 | --- | ---: | ---: |
 | ✨ **Coolness** | 15/20 | 17/20 |
 | Robustness | 14/20 | 13/20 |
-| Safety | 13/20 | 12/20 |
+| Safety | 13/20 | 11/20 |
 
-Claude produced a **fresh independent assessment of `dccf1a6` on October 24,
-2026** (published v1.1.2, clean source). The previous Claude report was replaced
-only after the complete standalone output and its read-command log were
-verified. The host-verified model is `claude-fable-5-1`; the report preserves
-the raw reviewer's response after a separate execution-provenance block.
-Codex's independent assessment of released commit `5103954` (v1.1.2), using a
-Claude-prepared prompt, remains unchanged; no new Codex pass was requested in
-this refresh. Both prompts describe the public ISC upstream, distributions and
-external-user/integration exposure. Scores are each reviewer's own judgments,
-not calibrated for agreement or derived from the other report.
+Both reports are fresh independent assessments completed on October 24, 2026:
+Claude reviewed clean commit `dccf1a6`; Sol reviewed clean commit `fd0bf4d`
+(published version 1.1.2). The host verified actual models
+`claude-fable-5-1` and `gpt-6.1-sol_codeassist` from execution headers.
+Each report preserves its complete raw reviewer response after a separate
+host-verified provenance block.
 
-The fresh Claude run excluded prior reports and README audit content before
-reading. It highlights SDK transport calls bypassing the known-Vault guard
-(the CLI path is distinguished), supply-chain/workflow risks, and dependency
-hygiene; several exploitation and CVE claims remain explicitly hypotheses.
-Syntax, ESLint and Go formatting checks succeeded; full Node tests and Go
-checks were blocked by the read-only filesystem. These restrictions are not
-product regressions or successful integration tests. The earlier Codex run
-performed syntax/format checks and bounded in-memory checks, not full
-integration tests either.
+For the Sol refresh, Claude prepared the prompt without another source
+assessment; the host executed the exact input in a fresh ephemeral read-only
+session. Claude then accepted completeness and input exclusions from the new
+run's materials. This coordination was not an independent re-verification of
+all findings. The Claude report remains unchanged.
+
+Neither source reviewer received earlier reports, findings, scores or task
+handoffs. Documentation ranges were isolated before reading. Reports retain
+their own conclusions and scores, without calibration for agreement. Both
+identify missing destination-trust enforcement in SDK transport helpers while
+distinguishing the restricted CLI path. The Sol report also examines parser-log
+disclosure, plaintext HTTP acceptance, mutable Go cache identity and publication
+controls. Verified source observations are separated from hypothetical impact
+and hosted behavior; neither report substitutes for a live advisory scan.
+
+Sol performed syntax/formatting checks and bounded offline in-memory probes;
+Claude performed syntax, ESLint and formatting checks. Neither pass executed
+complete runtime/integration suites under the strict read-only constraints.
+Checks not performed and their reasons are explicit in each report.
 
 Separate release validation previously passed all 80 Node tests on Node 24,
 ESLint, Go vet/race tests, Windows compilation, and Node/Go CLI output
-comparisons. Those are separate results, not checks repeated by this assessment.
-Neither report constitutes certification or a complete current
-vulnerability-database clearance.
+comparisons. Those are separate results, not checks repeated by these
+assessments. Neither report constitutes certification, release approval or a
+complete current vulnerability-database clearance.
 
 ## Credits
 
