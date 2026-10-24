@@ -151,18 +151,17 @@ scoring Coolness, Robustness and Safety out of 20:
 
 | Criterion | Codex (Claude Fable 5.1) | Codex (GPT 6.1) |
 | --- | ---: | ---: |
-| ✨ **Coolness** | 17/20 | 18/20 |
-| Robustness | 16/20 | 14/20 |
-| Safety | 14/20 | 13/20 |
+| ✨ **Coolness** | 17/20 | 17/20 |
+| Robustness | 15/20 | 12/20 |
+| Safety | 14/20 | 12/20 |
 
-Both reviews converge on the same items: the trust model of a `./.vauthrc`
-found in the current directory, cached tokens trusted until expiry without a
-revocation check, and the Node CLI exiting 0 with an empty token when no
-authentication method is configured. Scores are opinions, not a certification.
-
-Since these reviews, a project `./.vauthrc` pointing at a Vault unknown to
-`~/.vauthrc` requires confirmation (`known_vaults`), and an inherited
-`VAULT_TOKEN` is returned as is instead of being looked up and cached.
+Both reviews converge on the same items: the Node CLI exiting 0 with an
+empty token when no authentication method is available, the Node CLI
+exposing `lookupSelf`/`request` outside the `known_vaults` consent gate and
+accepting any flag (`--accept=false` counts as accept), `--accept` delegating
+more than the prompt explains, cached tokens trusted until expiry without a
+revocation check, and a lockfile-free release pipeline. Scores are opinions,
+not a certification. Both reviews describe the current tree (v1.1.1).
 
 ## Credits
 
