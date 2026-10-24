@@ -85,6 +85,7 @@ async function fixture(t, options = {}) {
   const client = () => {
     // Avoid reading the real user's environment/configuration/cache.
     const instance = Object.create(Vauth.prototype);
+    instance._safe_vault = true; // The fixture's loopback endpoint is explicitly trusted.
     instance.rc = {jwt_auth : {path : 'jwt', jwt : 'test-jwt', role : 'test-role'}};
     instance.VAULT_ADDR = `http://127.0.0.1:${server.address().port}`;
     instance._token_cache_file = () => path.join(directory, '.vauth', 'tokens', instance._token_cache_key() + '.creds');
@@ -520,9 +521,9 @@ test('real CLI reads token_cache false from .vauthrc', async t => {
   const home = path.dirname(path.dirname(path.dirname(file)));
   const rc = path.join(home, '.vauthrc');
   fs.writeFileSync(rc, JSON.stringify({vault_addr : instance.VAULT_ADDR, ...instance.rc, token_cache : false}));
-  const cli = path.resolve(__dirname, '..', 'index.js');
+  const cli = path.resolve(__dirname, '..', 'bin', 'vauth-login.js');
   for(let i = 0; i < 2; i++) {
-    const output = await exec(process.execPath, [cli, 'login'], {
+    const output = await exec(process.execPath, [cli], {
       cwd : home,
       env : {...process.env, HOME : home, VAUTHRC : rc, VAULT_TOKEN : '', SSH_AUTH_SOCK : process.env.SSH_AUTH_SOCK},
     });
@@ -598,8 +599,7 @@ test('without an SSH agent existing armor is left untouched', async t => {
 });
 
 
-// A project's ./.vauthrc selecting a Vault unknown to ~/.vauthrc is confirmed
-// once before the first request; the user vouches for it in ~/.vauthrc.
+// A project-selected Vault must be allowed by ~/.vauthrc or VAULT_ADDR.
 async function projectVault(t, options = {}) {
   const {client, file, requests, seed} = await fixture(t, options);
   const instance = client();
@@ -610,40 +610,37 @@ async function projectVault(t, options = {}) {
   fs.writeFileSync(path.join(project, '.vauthrc'), JSON.stringify(rc));
   if(options.home)
     fs.writeFileSync(path.join(home, '.vauthrc'), JSON.stringify(options.home(instance.VAULT_ADDR)));
-  const cli = path.resolve(__dirname, '..', 'index.js');
-  const run = (script, input) => new Promise(resolve => {
-    const child = require('child_process').spawn(process.execPath, script ? ['-e', script] : [cli, 'login', ...(options.args || [])], {
-      cwd : project, env : {...process.env, HOME : home, VAUTHRC : '', VAULT_TOKEN : '', VAULT_ADDR : ''},
-    });
-    let stdout = '', stderr = '';
-    // Answers are typed one per question, the next one waiting for the next
-    // prompt; the pipe is closed after the last one, as a terminal would not be.
-    const answers = input === undefined ? [] : [].concat(input);
-    const type = () => {
-      if(answers.length)
-        child.stdin.write(answers.shift());
-      if(!answers.length)
-        child.stdin.end();
-    };
-    child.stdout.on('data', chunk => stdout += chunk);
-    child.stderr.on('data', chunk => {
-      stderr += chunk;
-      if(String(chunk).includes('[y/N]'))
-        type();
-    });
-    child.on('close', code => resolve({code, stdout, stderr}));
-    if(!script)
-      child.stdin.end();
-  });
-  // Simulate a terminal on a piped stdin so the prompt reads the answer.
+  const cli = path.resolve(__dirname, '..', 'bin', 'vauth-login.js');
+  const run = async script => {
+    try {
+      const output = await exec(process.execPath, script ? ['-e', script] : [cli, ...(options.args || [])], {
+        cwd : project, env : {...process.env, HOME : home, VAUTHRC : '', VAULT_TOKEN : '', VAULT_ADDR : options.envAddr ? options.envAddr(instance.VAULT_ADDR) : ''},
+      });
+      return {code : 0, ...output};
+    } catch(err) {
+      return {code : err.code, stdout : err.stdout, stderr : err.stderr};
+    }
+  };
+  // A terminal must not change the allowlist decision.
   const tty = `process.stdin.isTTY = true;
-    const Vauth = require(${JSON.stringify(cli)});
+    const Vauth = require(${JSON.stringify(path.resolve(__dirname, '..', 'index.js'))});
     new Vauth().login().then(token => process.stdout.write(token), err => { console.error(err.message); process.exit(1); });`;
   return {instance, run, tty, requests, seed, file, addr : instance.VAULT_ADDR};
 }
 
-test('--accept trusts an unknown project vault without a terminal (CI)', async t => {
-  const {run, requests} = await projectVault(t, {rc : {token_cache : false}, args : ['--accept']});
+for(const flag of ['--accept', '--accept=false']) {
+  test(`removed ${flag} is rejected before any request`, async t => {
+    const {run, requests} = await projectVault(t, {rc : {token_cache : false}, args : [flag]});
+    const result = await run();
+    assert.notEqual(result.code, 0);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /Usage: vauth-login/);
+    assert.deepEqual(requests, []);
+  });
+}
+
+test('a project vault matching environment VAULT_ADDR is allowed without a home config', async t => {
+  const {run, requests} = await projectVault(t, {rc : {token_cache : false}, envAddr : addr => addr + '/'});
   const result = await run();
   assert.equal(result.code, 0, result.stderr);
   assert.equal(result.stdout, 'fresh-token');
@@ -651,17 +648,13 @@ test('--accept trusts an unknown project vault without a terminal (CI)', async t
   assert.deepEqual(requests.map(req => req.path), ['/v1/auth/jwt/login']);
 });
 
-test('connect(renew, accept) skips the confirmation and keeps the vault unknown for later calls', async t => {
-  const {client, requests} = await fixture(t);
-  const instance = client();
-  instance.rc.token_cache = false;
-  instance._unknown_vault = true;
-  instance.rc_file = '/project/.vauthrc';
-  await assert.rejects(instance.connect(), /known_vaults/);
+test('environment VAULT_ADDR does not trust a different project vault', async t => {
+  const {run, requests} = await projectVault(t, {rc : {token_cache : false}, envAddr : () => 'https://other.example.test'});
+  const result = await run();
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stdout, '');
+  assert.ok(result.stderr.includes('Unknown vault'));
   assert.deepEqual(requests, []);
-  assert.equal(await instance.connect(false, true), 'fresh-token');
-  assert.equal(instance._unknown_vault, true);
-  assert.deepEqual(requests.map(req => req.path), ['/v1/auth/jwt/login']);
 });
 
 test('a project .vauthrc selecting an unknown vault is refused without a terminal, before any request', async t => {
@@ -675,31 +668,21 @@ test('a project .vauthrc selecting an unknown vault is refused without a termina
   assert.deepEqual(requests, []);
 });
 
-test('an unknown project vault asks once on a terminal; refusal makes no request', async t => {
-  const {run, tty, requests, addr} = await projectVault(t, {rc : {token_cache : false}});
-  const refused = await run(tty, 'n\n');
-  assert.notEqual(refused.code, 0);
-  assert.equal(refused.stdout, '');
-  assert.ok(refused.stderr.includes('Continue? [y/N]'));
-  assert.ok(refused.stderr.includes(`Unknown vault ${addr}: refused`));
+test('an unknown project vault is refused on a terminal without a dialogue', async t => {
+  const {run, tty, requests} = await projectVault(t, {rc : {token_cache : false}});
+  const result = await run(tty);
+  assert.notEqual(result.code, 0);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /Unknown vault/);
+  assert.ok(!result.stderr.includes('Continue?'));
   assert.deepEqual(requests, []);
-  const accepted = await run(tty, ['maybe\n', 'yes\n']);
-  assert.equal(accepted.code, 0, accepted.stderr);
-  assert.equal(accepted.stdout, 'fresh-token');
-  assert.ok(accepted.stderr.includes('Please type [yes] or [no]'));
-  assert.equal(accepted.stderr.match(/Continue\? \[y\/N\]/g).length, 2);
-  assert.deepEqual(requests.map(req => req.path), ['/v1/auth/jwt/login']);
-  const defaulted = await run(tty, '\n');
-  assert.notEqual(defaulted.code, 0);
-  assert.ok(defaulted.stderr.includes(`Unknown vault ${addr}: refused`));
-  assert.deepEqual(requests.map(req => req.path), ['/v1/auth/jwt/login']);
 });
 
 for(const [label, home] of [
   ['vault_addr', addr => ({vault_addr : addr + '/'})],
   ['known_vaults', addr => ({known_vaults : ['https://other.example.test', addr + '/']})],
 ]) {
-  test(`a project vault listed by ~/.vauthrc ${label} never prompts`, async t => {
+  test(`a project vault listed by ~/.vauthrc ${label} is allowed`, async t => {
     const {run, requests} = await projectVault(t, {rc : {token_cache : false}, home});
     const result = await run();
     assert.equal(result.code, 0, result.stderr);
@@ -709,7 +692,7 @@ for(const [label, home] of [
   });
 }
 
-test('a valid cached token for an unknown project vault is reused without prompting', async t => {
+test('a valid cached token for an unknown project vault is reused offline', async t => {
   const {run, instance, seed, requests} = await projectVault(t);
   await seed(instance);
   const result = await run();
@@ -719,7 +702,7 @@ test('a valid cached token for an unknown project vault is reused without prompt
   assert.deepEqual(requests, []);
 });
 
-test('renewing a cached token for an unknown project vault requires confirmation', async t => {
+test('renewing a cached token for an unknown project vault is refused', async t => {
   const {run, instance, seed, requests} = await projectVault(t, {ttl : HOUR});
   await seed(instance);
   const result = await run();
@@ -805,30 +788,25 @@ test('Windows keeps cache enabled and selects Pageant without SSH_AUTH_SOCK', as
 });
 
 
-for(const command of [[], ['login'], ['connect']]) {
-  test(`standalone CLI ${JSON.stringify(command)} outputs a token and reuses cache`, async t => {
-    const {client, file, requests} = await fixture(t);
-    const instance = client();
-    const home = path.dirname(path.dirname(path.dirname(file)));
-    const rc = path.join(home, '.vauthrc');
-    fs.writeFileSync(rc, JSON.stringify({vault_addr : instance.VAULT_ADDR, ...instance.rc, env : {map : {'INVALID;NAME' : 'ignored'}}}));
-    const cli = path.resolve(__dirname, '..', 'index.js');
-    const env = {...process.env, HOME : home, VAUTHRC : rc, VAULT_TOKEN : ''};
-    const initial = await exec(process.execPath, [cli, ...command, '--renew'], {cwd : home, env});
-    assert.equal(initial.stdout, 'fresh-token');
-    assert.match(initial.stderr, /^Vauth token: generated · 1d\n$/);
-    const armor = fs.readFileSync(file, 'utf8');
-    assert.match(armor, /^ssh-agent-crypt:v3:/);
-    const reused = await exec(process.execPath, [cli, ...command], {cwd : home, env});
-    assert.equal(reused.stdout, initial.stdout);
-    assert.match(reused.stderr, /^Vauth token: reused · /);
-    assert.equal(fs.readFileSync(file, 'utf8'), armor);
-    assert.deepEqual(requests.map(r => r.path), ['/v1/auth/jwt/login']);
-    const raw = await exec(process.execPath, [cli, '--ir://run=login', '--ir://raw'], {cwd : home, env});
-    assert.equal(raw.stdout, 'fresh-token');
-    assert.ok(!raw.stderr.includes('fresh-token'));
-  });
-}
+test('standalone CLI outputs a token and reuses cache', async t => {
+  const {client, file, requests} = await fixture(t);
+  const instance = client();
+  const home = path.dirname(path.dirname(path.dirname(file)));
+  const rc = path.join(home, '.vauthrc');
+  fs.writeFileSync(rc, JSON.stringify({vault_addr : instance.VAULT_ADDR, ...instance.rc, env : {map : {'INVALID;NAME' : 'ignored'}}}));
+  const cli = path.resolve(__dirname, '..', 'bin', 'vauth-login.js');
+  const env = {...process.env, HOME : home, VAUTHRC : rc, VAULT_TOKEN : ''};
+  const initial = await exec(process.execPath, [cli, '--renew'], {cwd : home, env});
+  assert.equal(initial.stdout, 'fresh-token');
+  assert.match(initial.stderr, /^Vauth token: generated · 1d\n$/);
+  const armor = fs.readFileSync(file, 'utf8');
+  assert.match(armor, /^ssh-agent-crypt:v3:/);
+  const reused = await exec(process.execPath, [cli], {cwd : home, env});
+  assert.equal(reused.stdout, initial.stdout);
+  assert.match(reused.stderr, /^Vauth token: reused · /);
+  assert.equal(fs.readFileSync(file, 'utf8'), armor);
+  assert.deepEqual(requests.map(r => r.path), ['/v1/auth/jwt/login']);
+});
 
 test('constructor ignores unrelated configuration and expands authentication macros only', async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vauth-login-rc-'));
@@ -879,27 +857,20 @@ test('transport deadline includes a stalled response body', async t => {
   await assert.rejects(v.request('GET', 'stall'), err => err.code === 'ETIMEDOUT');
 });
 
-test('cnyks runs version, generates help and reports unknown commands', async t => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vauth-login-version-'));
+test('CLI fails when no authentication method can produce a token', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vauth-login-unbound-'));
   t.after(() => fs.rmSync(directory, {recursive : true, force : true}));
-  const cli = path.resolve(__dirname, '..', 'index.js');
-  const options = {cwd : directory, env : {...process.env, HOME : directory, VAUTHRC : '', VAULT_ADDR : '', VAULT_TOKEN : ''}};
-  for(const command of [['version'], ['--version'], ['--ir://run=version']]) {
-    const out = await exec(process.execPath, [cli, ...command], options);
-    assert.equal(out.stdout.trim(), require('../package.json').version);
-    assert.equal(out.stderr, '');
+  const cli = path.resolve(__dirname, '..', 'bin', 'vauth-login.js');
+  for(const args of [[], ['--renew']]) {
+    const env = {...process.env, HOME : directory, VAUTHRC : '', VAULT_ADDR : '', VAULT_TOKEN : args.length ? 'secret-token' : ''};
+    await assert.rejects(exec(process.execPath, [cli, ...args], {cwd : directory, env}), err => {
+      assert.equal(err.code, 1);
+      assert.equal(err.stdout, '');
+      assert.match(err.stderr, /no authentication method available/);
+      assert.ok(!err.stderr.includes('secret-token'));
+      return true;
+    });
   }
-  for(const command of [['--help'], ['help'], ['?'], ['runner:list_commands']]) {
-    const help = await exec(process.execPath, [cli, ...command], options);
-    assert.equal(help.stdout, '');
-    assert.match(help.stderr, /commands list/);
-    assert.match(help.stderr, /login/);
-    assert.match(help.stderr, /connect/);
-    assert.match(help.stderr, /version/);
-  }
-  await assert.rejects(exec(process.execPath, [cli, 'unknown-command'], options));
-  const unbound = await exec(process.execPath, [cli], options);
-  assert.equal(unbound.stdout, '');
 });
 
 test('CLI errors do not print server response bodies or inherited tokens', async t => {
@@ -910,7 +881,7 @@ test('CLI errors do not print server response bodies or inherited tokens', async
   t.after(() => new Promise(resolve => server.close(resolve)));
   const rc = path.join(directory, '.vauthrc');
   fs.writeFileSync(rc, JSON.stringify({vault_addr : `http://127.0.0.1:${server.address().port}`, jwt_auth : {jwt : 'secret-jwt'}, token_cache : false}));
-  const cli = path.resolve(__dirname, '..', 'index.js');
+  const cli = path.resolve(__dirname, '..', 'bin', 'vauth-login.js');
   await assert.rejects(exec(process.execPath, [cli, '--renew'], {
     cwd : directory, env : {...process.env, HOME : directory, VAUTHRC : rc, VAULT_TOKEN : 'secret-token'},
   }), err => {
@@ -930,7 +901,7 @@ test('CLI returns an inherited token as is, announcing it on stderr only', async
   t.after(() => new Promise(resolve => server.close(resolve)));
   const rc = path.join(directory, '.vauthrc');
   fs.writeFileSync(rc, JSON.stringify({vault_addr : `http://127.0.0.1:${server.address().port}`, jwt_auth : {jwt : 'secret-jwt'}, token_cache : false}));
-  const cli = path.resolve(__dirname, '..', 'index.js');
+  const cli = path.resolve(__dirname, '..', 'bin', 'vauth-login.js');
   const {stdout, stderr} = await exec(process.execPath, [cli], {
     cwd : directory, env : {...process.env, HOME : directory, VAUTHRC : rc, VAULT_TOKEN : 'inherited-token'},
   });
@@ -969,24 +940,115 @@ test('HTTPError keeps the response available to SDK callers while logs show stat
   assert.ok(!JSON.stringify(error).includes('secret-server-response'));
 });
 
-test('cnyks static version works with a malformed configuration file', async t => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vauth-login-static-'));
-  t.after(() => fs.rmSync(directory, {recursive : true, force : true}));
-  fs.writeFileSync(path.join(directory, '.vauthrc'), 'vault_addr: [');
-  const cli = path.resolve(__dirname, '..', 'index.js');
-  const options = {cwd : directory, env : {...process.env, HOME : directory, VAUTHRC : ''}};
-  for(const command of [['version'], ['--version'], ['--ir://run=version']]) {
-    const result = await exec(process.execPath, [cli, ...command], options);
-    assert.equal(result.stdout, require('../package.json').version);
-    assert.equal(result.stderr, '');
-  }
-});
-
-
-test('Node login returns the token from connect for cnyks raw rendering', async () => {
+test('Node login remains an SDK alias for connect', async () => {
   const instance = Object.create(Vauth.prototype);
   let forced;
   instance.connect = async renew => { forced = renew; return 'returned-token'; };
   assert.equal(await instance.login(true), 'returned-token');
   assert.equal(forced, true);
+});
+
+
+test('CLI rejects SDK methods and unknown flags before using inherited credentials', async t => {
+  const {run, requests} = await projectVault(t, {rc : {token_cache : false}});
+  const cli = path.resolve(__dirname, '..', 'bin', 'vauth-login.js');
+  // The project file is deliberately malformed: argument rejection must precede
+  // configuration parsing as well as any request or token output.
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vauth-login-args-'));
+  t.after(() => fs.rmSync(directory, {recursive : true, force : true}));
+  fs.writeFileSync(path.join(directory, '.vauthrc'), 'vault_addr: [');
+  const options = {cwd : directory, env : {...process.env, HOME : directory, VAUTHRC : '', VAULT_TOKEN : 'secret-token'}};
+  for(const args of [['lookupSelf'], ['request', 'GET', 'auth/token/lookup-self'], ['vaultURL'], ['runner:list_commands'], ['--ir://run=lookupSelf'], ['--ir://raw'], ['--foo'], ['--renew=maybe'], ['--renew=true'], ['--renew=false'], ['login'], ['connect'], ['version'], ['help'], ['login', 'extra']]) {
+    await assert.rejects(exec(process.execPath, [cli, ...args], options), err => {
+      assert.equal(err.code, 1);
+      assert.equal(err.stdout, '');
+      assert.match(err.stderr, /Usage: vauth-login/);
+      assert.ok(!err.stderr.includes('secret-token'));
+      return true;
+    });
+  }
+  // The normal unknown-project login still refuses before any request.
+  const result = await run();
+  assert.notEqual(result.code, 0);
+  assert.deepEqual(requests, []);
+});
+
+test('only --renew forces login instead of returning inherited credentials', async t => {
+  const {client, file, requests} = await fixture(t);
+  const home = path.dirname(path.dirname(path.dirname(file)));
+  const rc = path.join(home, '.vauthrc');
+  fs.writeFileSync(rc, JSON.stringify({vault_addr : client().VAULT_ADDR, jwt_auth : {jwt : 'test-jwt', role : 'test-role'}, token_cache : false}));
+  const cli = path.resolve(__dirname, '..', 'bin', 'vauth-login.js');
+  const options = {cwd : home, env : {...process.env, HOME : home, VAUTHRC : rc, VAULT_TOKEN : 'inherited-token'}};
+  const reused = await exec(process.execPath, [cli], options);
+  assert.equal(reused.stdout, 'inherited-token');
+  assert.equal(reused.stderr, 'Vauth token: inherited\n');
+  assert.deepEqual(requests, []);
+  const renewed = await exec(process.execPath, [cli, '--renew'], options);
+  assert.equal(renewed.stdout, 'fresh-token');
+  assert.deepEqual(requests.map(req => req.path), ['/v1/auth/jwt/login']);
+});
+
+test('npm executable points at the shipped standalone CLI', () => {
+  const manifest = require('../package.json');
+  assert.equal(manifest.bin['vauth-login'], './bin/vauth-login.js');
+  assert.ok(manifest.files.includes('bin/vauth-login.js'));
+});
+
+
+test('_safe_vault reflects the noninteractive address allowlist', () => {
+  const instance = Object.create(Vauth.prototype);
+  instance.VAULT_ADDR = 'https://unknown.example.test';
+  instance.rc_file = '/project/.vauthrc';
+  instance._safe_vault = false;
+  assert.throws(() => instance._check_vault(), /Unknown vault/);
+  assert.equal(instance._safe_vault, false);
+  instance._safe_vault = true;
+  instance._check_vault();
+  assert.equal(instance._safe_vault, true);
+});
+
+test('SDK commands cannot send inherited credentials to an unknown project Vault', async t => {
+  const {client, file, requests} = await fixture(t);
+  const home = path.dirname(path.dirname(path.dirname(file)));
+  const project = path.join(home, 'project');
+  fs.mkdirSync(project);
+  fs.writeFileSync(path.join(project, '.vauthrc'), JSON.stringify({vault_addr : client().VAULT_ADDR, jwt_auth : {jwt : 'test-jwt', role : 'test-role'}, token_cache : false}));
+  const cli = path.resolve(__dirname, '..', 'bin', 'vauth-login.js');
+  const options = {cwd : project, env : {...process.env, HOME : home, VAUTHRC : '', VAULT_ADDR : '', VAULT_TOKEN : 'secret-token'}};
+  for(const args of [['lookupSelf'], ['request', 'GET'], ['vaultURL']]) {
+    await assert.rejects(exec(process.execPath, [cli, ...args], options), err => {
+      assert.equal(err.stdout, '');
+      assert.ok(!err.stderr.includes('secret-token'));
+      assert.match(err.stderr, /Usage: vauth-login/);
+      return true;
+    });
+  }
+  assert.deepEqual(requests, []);
+});
+
+
+test('--version and --help do not load configuration or use inherited credentials', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vauth-login-info-'));
+  t.after(() => fs.rmSync(directory, {recursive : true, force : true}));
+  fs.writeFileSync(path.join(directory, '.vauthrc'), 'vault_addr: [');
+  fs.writeFileSync(path.join(directory, 'package.json'), '{');
+  const cli = path.resolve(__dirname, '..', 'bin', 'vauth-login.js');
+  const options = {cwd : directory, env : {...process.env, HOME : directory, VAUTHRC : '', VAULT_TOKEN : 'secret-token'}};
+  for(const args of [['--version'], ['--renew', '--version']]) {
+    const result = await exec(process.execPath, [cli, ...args], options);
+    assert.equal(result.stdout, require('../package.json').version + '\n');
+    assert.equal(result.stderr, '');
+  }
+  for(const args of [['--help'], ['--renew', '--version', '--help']]) {
+    const result = await exec(process.execPath, [cli, ...args], options);
+    assert.equal(result.stdout, 'Usage: vauth-login [--renew] [--version] [--help]\n');
+    assert.equal(result.stderr, '');
+  }
+  await assert.rejects(exec(process.execPath, [cli, '--help', '--bogus'], options), err => {
+    assert.equal(err.code, 1);
+    assert.equal(err.stdout, '');
+    assert.ok(!err.stderr.includes('secret-token'));
+    return true;
+  });
 });

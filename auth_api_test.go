@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -140,5 +142,16 @@ func TestUnrelatedEncryptionConfigIgnored(t *testing.T) {
 		}
 		equal(t, rc.AuthKey(), baseline.AuthKey())
 		equal(t, (&Vauth{RC: *rc, VaultAddr: rc.VaultAddr}).TokenCacheKey(), expected)
+	}
+}
+
+func TestNewRequiresUserHome(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Setenv("USERPROFILE", "")
+	} else {
+		t.Setenv("HOME", "")
+	}
+	if _, err := New(); err == nil || !strings.Contains(err.Error(), "Could not determine user home directory") {
+		t.Fatalf("missing user home should fail initialization: %v", err)
 	}
 }

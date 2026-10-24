@@ -32,13 +32,13 @@ Timeouts propagate with `code = 'ETIMEDOUT'`.
 property; error logging displays the status.
 
 The client exposes `rc`, `rc_file`, `VAULT_ADDR`, and `VAULT_TOKEN`.
-`connect(renew, accept)` returns an inherited `VAULT_TOKEN` as is, then the
+`connect(renew)` returns an inherited `VAULT_TOKEN` as is, then the
 token for configured authentication, or undefined when authentication is
-unavailable. When `./.vauthrc` selects a Vault that `~/.vauthrc` does not list
-(`vault_addr` or `known_vaults`), `_trust_vault()` asks once before the first
-request through `cnyks/prompt/bool` (question on stderr, `yes`/`no`, empty
-answer refuses, anything else is asked again) and rejects without a TTY;
-`accept` skips that check. The Go prompt follows the same dialogue.
+unavailable. Before login or renewal, `_check_vault()` rejects a Vault selected
+by `./.vauthrc` unless it matches environment `VAULT_ADDR`, or the user's
+`~/.vauthrc` lists it as `vault_addr` or in `known_vaults`. There is no interactive
+prompt or per-call acceptance override. Inherited tokens and valid cached
+tokens are returned offline without this network-address check.
 
 ## Go
 
@@ -53,15 +53,14 @@ status, body, err := client.Request("GET", "auth/token/lookup-self", token, nil,
 ```
 
 `Vauth` exposes `RC`, `RCFile`, `VaultAddr`, `VaultToken`, `Agent`, `TokenCache`,
-`CacheDir`, `Environ`, `Stderr`, `HTTPClient`, `Confirm`, `Accept`, and `Now`. `New()`
+`CacheDir`, `Environ`, `Stderr`, `HTTPClient`, and `Now`. `New()`
 discovers the agent, loads configuration, applies the process environment and
 marks a Vault selected by `./.vauthrc` as unknown unless `KnownVault(addr, home,
-environ)` finds it in `~/.vauthrc`. For tests/embedded use, fields may be supplied
-directly. `Connect(renew)` returns the token to its caller; an inherited
-`VaultToken` is returned as is unless `renew` is set. Before the first request to
-an unknown Vault, `Confirm(addr, file)` is called once; it defaults to a
-`Continue? [y/N]` prompt on the terminal and to a refusal without one; `Accept`
-skips the check (`--accept`).
+environ)` finds it in `~/.vauthrc` or matches environment `VAULT_ADDR`. For
+tests/embedded use, fields may be supplied directly. `Connect(renew)` returns
+the token; an inherited `VaultToken` is returned as is unless `renew` is set.
+Login or renewal to an unknown project-selected address is refused without
+interaction. No confirmation callback is exposed.
 
 `LookupSelf(token)` validates online and returns `*LookupToken` with `TTL`,
 `Renewable`, `CreationTTL`, `EntityID`, and `LeaseDuration`.
@@ -71,24 +70,28 @@ skips the check (`--accept`).
 `Environ` and `HumanDiff` support embedding.
 
 `Connect(false)` ignores a token when no auth method is configured and returns an
-empty string without error; the native CLI reports that empty result as a failure.
+empty string without error; both CLIs report that empty result as a failure.
 One client announces status once per connection unless forced to log in again.
 
-## CLI contract (both implementations)
+## CLI contract (Node and Go)
 
-- Default, `login`, `connect`: authenticate and emit the token without a newline.
-- `--renew`: force login instead of returning inherited/cache credentials.
-- `--accept`: trust the Vault selected by `./.vauthrc` without confirmation (CI).
-- `version`, `--version`: emit the version without loading credentials.
-- `--help`, `help`: command help. Go prints usage on stdout; Node prints the
-  cnyks-generated command list on stderr.
-- Errors: nonzero exit, diagnostics on stderr.
+```text
+vauth-login [--renew] [--version] [--help]
+```
 
-Go release versions use the `v` tag prefix; Node uses the package semver.
+- No flags: return an inherited/cache token or authenticate.
+- `--renew`: force fresh authentication instead of reusing credentials.
+- `--version`: print the package/release version with a newline, without loading
+  project configuration or credentials. The Go tag's `v` prefix is omitted.
+- `--help`: print usage on stdout without loading configuration or credentials.
+- Information flags take precedence: `--help`, then `--version`, then login.
+- Token output is raw stdout, without a newline; status/errors go to stderr.
+- Other arguments, aliases, and `--flag=value` forms are rejected before
+  configuration loading or credential output. No token available: exit 1.
 
-The Node CLI delegates method lookup, parameters, aliases and raw result
-rendering to cnyks (`--ir://raw`). `connect` is a cnyks alias for `login`;
-`--ir://run=version` and `runner:list_commands` use its native runner interface.
+The Node executable is `bin/vauth-login.js`, separate from the `index.js` SDK;
+the Go executable is `cmd/vauth-login`. SDK helpers are not CLI commands.
+Neither implementation uses cnyks or interactive confirmation.
 
 ## Verification
 
@@ -112,11 +115,13 @@ login on Windows.
 Coverage includes cache isolation and format compatibility, encrypted-only disk
 storage, cache disabled/missing/corrupt/expired/unwritable, unlimited lifetime,
 lease thresholds and renewal baseline, forced login, inherited credentials
-returned as is, unknown project Vault confirmation (`known_vaults`, prompt,
-refusal, no TTY, `--accept`, cache reuse without prompt), 400/403 reauthentication, server failures, key selection, status/output secrecy,
-configuration precedence and authentication configuration, public lookup/HTTP
-APIs, redirect rejection and Node request deadlines. CLI subprocess tests check default and aliases,
-raw token output, renewal, caching, reflected commands and runner help.
+returned as is, rejection of unknown project addresses with and without a TTY,
+home/environment allowlisting, rejection of removed `--accept`, offline cache
+reuse, 400/403 reauthentication, server failures, key selection, status/output
+secrecy, configuration precedence, public lookup/HTTP APIs, redirect rejection,
+and Node request deadlines. CLI subprocess tests cover raw token output,
+renewal, caching, SDK-command rejection, strict arguments, empty-token failure,
+and help/version output without loading malformed project configuration.
 
 Live installation validation must clear the inherited token, force a new login,
 validate it with Vault `lookup-self`, then invoke the installed binary again with

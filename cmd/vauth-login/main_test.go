@@ -51,18 +51,18 @@ func TestCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	inherited := ""
+	inherited, envAddr := "", ""
 	dir, rcEnv := home, rc
 	call := func(args ...string) (string, string, error) {
 		cmd := exec.Command(exe, append([]string{"-test.run=TestCLIProcess", "--"}, args...)...)
 		cmd.Dir = dir
 		for _, entry := range os.Environ() {
 			key := strings.SplitN(entry, "=", 2)[0]
-			if key != "VAULT_TOKEN" && key != "VAUTHRC" && key != "SSH_AUTH_SOCK" && key != "HOME" && key != "USERPROFILE" && key != "LOGIN_CLI_TEST_PROCESS" {
+			if key != "VAULT_ADDR" && key != "VAULT_TOKEN" && key != "VAUTHRC" && key != "SSH_AUTH_SOCK" && key != "HOME" && key != "USERPROFILE" && key != "LOGIN_CLI_TEST_PROCESS" {
 				cmd.Env = append(cmd.Env, entry)
 			}
 		}
-		cmd.Env = append(cmd.Env, "LOGIN_CLI_TEST_PROCESS=1", "HOME="+home, "VAUTHRC="+rcEnv, "SSH_AUTH_SOCK=", "VAULT_TOKEN="+inherited)
+		cmd.Env = append(cmd.Env, "LOGIN_CLI_TEST_PROCESS=1", "HOME="+home, "VAUTHRC="+rcEnv, "SSH_AUTH_SOCK=", "VAULT_TOKEN="+inherited, "VAULT_ADDR="+envAddr)
 		var stderr strings.Builder
 		cmd.Stderr = &stderr
 		cmd.Stdin = strings.NewReader("")
@@ -71,7 +71,7 @@ func TestCLI(t *testing.T) {
 	}
 
 	// A project ./.vauthrc selecting a Vault unknown to ~/.vauthrc is refused
-	// without a terminal; --accept trusts it (CI).
+	// without any prompt; VAULT_ADDR trusts only the matching address (CI).
 	project := t.TempDir()
 	if err := os.WriteFile(filepath.Join(project, ".vauthrc"), body, 0600); err != nil {
 		t.Fatal(err)
@@ -80,14 +80,24 @@ func TestCLI(t *testing.T) {
 	if stdout, stderr, err := call(); err == nil || stdout != "" || !strings.Contains(stderr, "Unknown vault "+server.URL+", selected by ") || !strings.Contains(stderr, "known_vaults") {
 		t.Fatalf("unknown vault: stdout=%q stderr=%q err=%v", stdout, stderr, err)
 	}
-	if stdout, stderr, err := call("--accept"); err != nil || stdout != "fixture-token" || strings.Contains(stderr, "Unknown vault") {
-		t.Fatalf("--accept: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+	for _, flag := range []string{"--accept", "--accept=false"} {
+		if stdout, stderr, err := call(flag); err == nil || stdout != "" || !strings.Contains(stderr, "Usage: vauth-login") {
+			t.Fatalf("%s: stdout=%q stderr=%q err=%v", flag, stdout, stderr, err)
+		}
 	}
-	if stdout, _, err := call("login", "--renew", "--accept"); err != nil || stdout != "fixture-token" {
-		t.Fatalf("--renew --accept: stdout=%q err=%v", stdout, err)
+	envAddr = server.URL + "/"
+	for _, args := range [][]string{nil, {"--renew"}} {
+		if stdout, stderr, err := call(args...); err != nil || stdout != "fixture-token" || strings.Contains(stderr, "Unknown vault") {
+			t.Fatalf("VAULT_ADDR %v: stdout=%q stderr=%q err=%v", args, stdout, stderr, err)
+		}
 	}
+	envAddr = "https://other.example.test"
+	if stdout, stderr, err := call(); err == nil || stdout != "" || !strings.Contains(stderr, "Unknown vault") {
+		t.Fatalf("different VAULT_ADDR: stdout=%q stderr=%q err=%v", stdout, stderr, err)
+	}
+	envAddr = ""
 	home, dir, rcEnv = filepath.Dir(rc), filepath.Dir(rc), rc
-	for _, args := range [][]string{nil, {"login"}, {"connect"}, {"--renew"}, {"login", "--renew"}, {"connect", "--renew"}} {
+	for _, args := range [][]string{nil, {"--renew"}} {
 		stdout, stderr, err := call(args...)
 		if err != nil || stdout != "fixture-token" || stderr != "Vauth token: generated · 1h\n" {
 			t.Fatalf("%v: stdout=%q stderr=%q err=%v", args, stdout, stderr, err)
@@ -103,15 +113,47 @@ func TestCLI(t *testing.T) {
 		t.Fatalf("inherited --renew: stdout=%q stderr=%q err=%v", stdout, stderr, err)
 	}
 	inherited = ""
-	for _, args := range [][]string{{"version"}, {"--version"}} {
+	for _, args := range [][]string{{"--version"}, {"--renew", "--version"}} {
 		stdout, stderr, err := call(args...)
-		if err != nil || stdout != "v1.0.0\n" || stderr != "" {
+		if err != nil || stdout != "1.0.0\n" || stderr != "" {
 			t.Fatalf("version: %q %q %v", stdout, stderr, err)
 		}
 	}
-	for _, args := range [][]string{{"env"}, {"run", "echo"}, {"--bogus"}, {"login", "unexpected"}, {"--source"}, {"--ir://json"}} {
+	for _, args := range [][]string{{"env"}, {"run", "echo"}, {"--bogus"}, {"login"}, {"connect"}, {"version"}, {"help"}, {"--renew=false"}, {"--renew=true"}, {"--source"}, {"--ir://json"}, {"--help", "--bogus"}} {
 		if _, _, err := call(args...); err == nil {
 			t.Fatalf("invalid command accepted: %v", args)
+		}
+	}
+}
+
+func TestCLIInformationalFlagsIgnoreConfiguration(t *testing.T) {
+	dir := t.TempDir()
+	for file, content := range map[string]string{".vauthrc": "vault_addr: [", "package.json": "{"} {
+		if err := os.WriteFile(filepath.Join(dir, file), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--version"}, "1.0.0\n"},
+		{[]string{"--renew", "--version"}, "1.0.0\n"},
+		{[]string{"--help"}, usage},
+		{[]string{"--renew", "--version", "--help"}, usage},
+	} {
+		cmd := exec.Command(exe, append([]string{"-test.run=TestCLIProcess", "--"}, c.args...)...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "LOGIN_CLI_TEST_PROCESS=1", "HOME="+dir, "VAUTHRC=", "VAULT_TOKEN=secret-token")
+		var stderr strings.Builder
+		cmd.Stderr = &stderr
+		out, err := cmd.Output()
+		if err != nil || string(out) != c.want || stderr.String() != "" {
+			t.Fatalf("%v: stdout=%q stderr=%q err=%v", c.args, out, stderr.String(), err)
 		}
 	}
 }

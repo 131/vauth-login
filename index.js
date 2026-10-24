@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 'use strict';
 
 const os   = require('os');
@@ -6,7 +5,6 @@ const fs    = require('fs');
 const path  = require('path');
 const {createHash, randomUUID} = require('crypto');
 const {encrypt, decrypt} = require('ssh-agent-crypt');
-const promptBool = require('cnyks/prompt/bool');
 
 const {parse} = require('yaml');
 const semver     = require('semver');
@@ -82,12 +80,12 @@ class VauthLogin {
     this.VAULT_TOKEN = process.env.VAULT_TOKEN;
 
     // A project's ./.vauthrc chooses the Vault; the user vouches for it in
-    // ~/.vauthrc (its vault_addr or its known_vaults list), or is asked.
-    this._unknown_vault = false;
+    // ~/.vauthrc (its vault_addr or its known_vaults list) or VAULT_ADDR; otherwise the request is refused.
+    this._safe_vault = true;
     if(vauth_rc === VAUTH_RC[1] && vauth_rc !== HOME_RC && this.rc.vault_addr) {
       const home = fs.existsSync(HOME_RC) ? loadRC(HOME_RC) : {};
-      const known = [home.vault_addr, ...(Array.isArray(home.known_vaults) ? home.known_vaults : [])].map(normalizeAddr);
-      this._unknown_vault = !known.includes(normalizeAddr(this.rc.vault_addr));
+      const known = [process.env.VAULT_ADDR, home.vault_addr, ...(Array.isArray(home.known_vaults) ? home.known_vaults : [])].map(normalizeAddr);
+      this._safe_vault = known.includes(normalizeAddr(this.rc.vault_addr));
     }
 
 
@@ -101,18 +99,10 @@ class VauthLogin {
     return VauthLogin.version();
   }
 
-  // Ask once before the first request to a Vault chosen by ./.vauthrc that
-  // ~/.vauthrc does not know. Without a terminal, refuse.
-  async _trust_vault(accept = false) {
-    if(!this._unknown_vault || accept)
-      return;
-    const where = `Unknown vault ${normalizeAddr(this.VAULT_ADDR)}, selected by ${this.rc_file}`;
-    const hint = 'Add it to known_vaults in ~/.vauthrc to stop being asked.';
-    if(!process.stdin.isTTY)
-      throw new Error(`${where}. ${hint}`);
-    if(!await promptBool(`${where}.\n${hint}\nContinue? `, false))
-      throw new Error(`Unknown vault ${normalizeAddr(this.VAULT_ADDR)}: refused`);
-    this._unknown_vault = false;
+  // A project-selected Vault must be known before login or renewal.
+  _check_vault() {
+    if(!this._safe_vault)
+      throw new Error(`Unknown vault ${normalizeAddr(this.VAULT_ADDR)}, selected by ${this.rc_file}. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.`);
   }
 
   _token_cache_key() {
@@ -166,9 +156,7 @@ class VauthLogin {
     console.error('Vauth token: %s · %s', operation, validity);
   }
 
-  async connect(renew = false, accept = false) /**
-  * @interactive_runner hide
-  */ {
+  async connect(renew = false) {
     if(this._connected && !renew)
       return this.VAULT_TOKEN;
 
@@ -200,7 +188,7 @@ class VauthLogin {
       if(ttl > 0 && ttl <= cached.lease_duration / 3) {
         if(cached.renewable) {
           try {
-            await this._trust_vault(accept);
+            this._check_vault();
             metadata = await this._renew_token(token);
             token = metadata.client_token;
             operation = 'renewed';
@@ -218,7 +206,7 @@ class VauthLogin {
     }
 
     if(!token) {
-      await this._trust_vault(accept);
+      this._check_vault();
       const agent_path = process.env.SSH_AUTH_SOCK || (process.platform === 'win32' ? 'pageant' : null);
       if(ssh_auth && agent_path) {
         metadata = await this._login_vault_ssh({...ssh_auth}, agent_path);
@@ -250,11 +238,8 @@ class VauthLogin {
     return auth;
   }
 
-  async login(renew = false, accept = false) /**
-  * Authenticate and return the token
-  * @alias connect
-  */ {
-    return this.connect(renew, accept);
+  async login(renew = false) {
+    return this.connect(renew);
   }
 
   async _login_vault_ssh({path = 'ssh', role}, agent_path = process.env.SSH_AUTH_SOCK) {
@@ -333,18 +318,6 @@ class VauthLogin {
     return {status : res.statusCode, body};
   }
 
-}
-
-//ensure module is called directly, i.e. not required
-if(module.parent === null) {
-  const {args, dict} = require('nyks/process/parseArgs')();
-  let cmd = args.shift() || 'login';
-  if(dict.version) cmd = 'version';
-  if(dict.help || cmd === 'help') cmd = '?';
-  const flags = ['--ir://raw'];
-  if(!dict['ir://run'] && !dict['ir://start']) flags.push(`--ir://run=${cmd}`);
-  if(cmd === 'version' || dict['ir://run'] === 'version') flags.push('--ir://static');
-  require('cnyks/lib/bundle')(VauthLogin, 'vauth-login', flags);
 }
 
 module.exports = VauthLogin;

@@ -652,9 +652,8 @@ func TestOneStatusPerConnection(t *testing.T) {
 	equal(t, stderr.String(), "")
 }
 
-// A project's ./.vauthrc selecting a Vault unknown to ~/.vauthrc is confirmed
-// once before the first request; VAUTHRC and ~/.vauthrc never ask.
-func TestUnknownVaultConfirmation(t *testing.T) {
+// Project-selected addresses must be allowlisted; no callback or prompt exists.
+func TestUnknownVaultRejected(t *testing.T) {
 	f := newFixture(t, fixtureOptions{})
 	home, project := t.TempDir(), t.TempDir()
 	environ := map[string]string{}
@@ -677,79 +676,40 @@ func TestUnknownVaultConfirmation(t *testing.T) {
 		v.unknownVault = !KnownVault(rc.VaultAddr, home, environ)
 		return v
 	}
-
-	// No ~/.vauthrc: asked, refused.
 	v := load()
-	var asked []string
-	v.Confirm = func(addr, file string) (bool, error) { asked = append(asked, addr+" "+file); return false, nil }
-	if _, err := v.Connect(false); err == nil || !strings.Contains(err.Error(), "Unknown vault "+f.server.URL+": refused") {
-		t.Fatalf("unexpected error: %v", err)
+	var stderr strings.Builder
+	v.Stderr = &stderr
+	if _, err := v.Connect(true); err == nil || !strings.Contains(err.Error(), "known_vaults") {
+		t.Fatalf("unknown Vault was not refused: %v", err)
 	}
-	equal(t, len(asked), 1)
-	equal(t, asked[0], f.server.URL+" "+projectRC)
+	equal(t, stderr.String(), "")
+	equal(t, len(f.requests), 0)
+	v.VaultToken = "inherited-token"
+	equal(t, connect(t, v, false), "inherited-token")
 	equal(t, len(f.requests), 0)
 
-	// Asked once, accepted: login proceeds and later connections do not ask again.
+	environ["VAULT_ADDR"] = f.server.URL + "/"
 	v = load()
-	asked = nil
-	v.Confirm = func(addr, file string) (bool, error) { asked = append(asked, addr); return true, nil }
-	equal(t, connect(t, v, false), "fresh-token")
+	equal(t, v.unknownVault, false)
 	equal(t, connect(t, v, true), "fresh-token")
-	equal(t, len(asked), 1)
-
-	// Cached reuse needs no request, so no confirmation.
+	delete(environ, "VAULT_ADDR")
 	v = load()
-	v.Confirm = func(addr, file string) (bool, error) { t.Fatal("asked"); return false, nil }
-	equal(t, connect(t, v, false), "fresh-token")
-
-	// Accept (--accept, CI) skips the confirmation entirely.
-	v = load()
-	v.Accept = true
-	v.Confirm = func(addr, file string) (bool, error) { t.Fatal("asked"); return false, nil }
-	equal(t, connect(t, v, true), "fresh-token")
 	equal(t, v.unknownVault, true)
+	equal(t, connect(t, v, false), "fresh-token") // valid cached token: offline
+	if _, err := v.Connect(true); err == nil {
+		t.Fatal("unknown Vault was not refused on forced login")
+	}
+	equalPaths(t, f.paths(), "/v1/auth/jwt/login")
 
-	// Known through ~/.vauthrc's own vault_addr, or through known_vaults.
+	environ["VAULT_ADDR"] = "https://other.example.test"
+	equal(t, load().unknownVault, true)
+	delete(environ, "VAULT_ADDR")
 	write(home, "vault_addr: "+f.server.URL+"\n")
 	equal(t, load().unknownVault, false)
 	write(home, "vault_addr: https://other.example.test\nknown_vaults: ['"+f.server.URL+"/']\n")
 	equal(t, load().unknownVault, false)
 	write(home, "vault_addr: https://other.example.test\n")
 	equal(t, load().unknownVault, true)
-
-	// Without a terminal, the default prompt refuses with the hint.
-	stdin := os.Stdin
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	writer.Close()
-	os.Stdin = reader
-	t.Cleanup(func() { os.Stdin = stdin; reader.Close() })
-	v = load()
-	if _, err := v.Connect(true); err == nil || !strings.Contains(err.Error(), "known_vaults") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	equalPaths(t, f.paths(), "/v1/auth/jwt/login", "/v1/auth/jwt/login", "/v1/auth/jwt/login")
-
-	// The terminal dialogue follows cnyks/prompt/bool.
-	for _, c := range []struct {
-		input    string
-		ok       bool
-		prompts  int
-		reminded bool
-	}{
-		{"y\n", true, 1, false}, {"YES\n", true, 1, false}, {"n\n", false, 1, false},
-		{"\n", false, 1, false}, {"maybe\nyes\n", true, 2, true}, {"", false, 1, false},
-	} {
-		var stderr strings.Builder
-		v = load()
-		v.Stderr = &stderr
-		ok := v.askVault(strings.NewReader(c.input), "Unknown vault x, selected by y")
-		equal(t, ok, c.ok)
-		equal(t, strings.Count(stderr.String(), "Continue? [y/N]"), c.prompts)
-		equal(t, strings.Contains(stderr.String(), "Please type [yes] or [no]"), c.reminded)
-	}
 }
 
 func TestReplaceEnv(t *testing.T) {

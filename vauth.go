@@ -3,7 +3,6 @@
 package vauthlogin
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -48,12 +47,6 @@ type Vauth struct {
 	Now func() time.Time
 	// RCFile is the configuration file New selected, if any.
 	RCFile string
-	// Confirm is asked once before the first request to a Vault selected by
-	// a project's ./.vauthrc that ~/.vauthrc does not know; nil prompts on
-	// the terminal and refuses without one.
-	Confirm func(addr, file string) (bool, error)
-	// Accept trusts the selected Vault without confirmation (--accept, CI).
-	Accept bool
 
 	connected    bool
 	unknownVault bool
@@ -114,8 +107,14 @@ func Environ() map[string]string {
 // found (VAUTHRC, ./.vauthrc, ~/.vauthrc).
 func New() (*Vauth, error) {
 	environ := Environ()
-	home, _ := os.UserHomeDir()
-	cwd, _ := os.Getwd()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("Could not determine user home directory: %w", err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("Could not determine working directory: %w", err)
+	}
 	if err := CheckProjectVersion(filepath.Join(cwd, "package.json"), Version); err != nil {
 		return nil, err
 	}
@@ -153,9 +152,6 @@ func New() (*Vauth, error) {
 		v.VaultAddr = environ["VAULT_ADDR"]
 	}
 	v.VaultToken = environ["VAULT_TOKEN"]
-	if v.VaultAddr == "" {
-		fmt.Fprintln(v.stderr(), "Not bound to any vault")
-	}
 	return v, nil
 }
 
@@ -179,56 +175,12 @@ func (v *Vauth) debug(format string, args ...any) {
 	}
 }
 
-// trustVault asks once before the first request to an unknown Vault.
-func (v *Vauth) trustVault() error {
-	if !v.unknownVault || v.Accept {
-		return nil
+// checkVault rejects an unknown project-selected Vault before login or renewal.
+func (v *Vauth) checkVault() error {
+	if v.unknownVault {
+		return fmt.Errorf("Unknown vault %s, selected by %s. Add it to known_vaults in ~/.vauthrc or set VAULT_ADDR.", strings.Trim(v.VaultAddr, "/"), v.RCFile)
 	}
-	addr := strings.Trim(v.VaultAddr, "/")
-	confirm := v.Confirm
-	if confirm == nil {
-		confirm = v.promptVault
-	}
-	ok, err := confirm(addr, v.RCFile)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("Unknown vault %s: refused", addr)
-	}
-	v.unknownVault = false
 	return nil
-}
-
-const knownVaultsHint = "Add it to known_vaults in ~/.vauthrc to stop being asked."
-
-func (v *Vauth) promptVault(addr, file string) (bool, error) {
-	where := fmt.Sprintf("Unknown vault %s, selected by %s", addr, file)
-	if info, err := os.Stdin.Stat(); err != nil || info.Mode()&os.ModeCharDevice == 0 {
-		return false, fmt.Errorf("%s. %s", where, knownVaultsHint)
-	}
-	return v.askVault(os.Stdin, where), nil
-}
-
-// askVault follows cnyks/prompt/bool: an empty answer takes the default (no),
-// anything but yes/no is asked again, end of input refuses.
-func (v *Vauth) askVault(input io.Reader, where string) bool {
-	reader := bufio.NewReader(input)
-	for {
-		fmt.Fprintf(v.stderr(), "%s.\n%s\nContinue? [y/N]", where, knownVaultsHint)
-		answer, err := reader.ReadString('\n')
-		if err != nil && answer == "" {
-			fmt.Fprintln(v.stderr())
-			return false
-		}
-		switch strings.ToLower(strings.TrimSpace(answer)) {
-		case "y", "yes":
-			return true
-		case "", "n", "no":
-			return false
-		}
-		fmt.Fprintln(v.stderr(), "Please type [yes] or [no]")
-	}
 }
 
 func (v *Vauth) tokenStatus(operation string, token *token) {
@@ -275,7 +227,7 @@ func (v *Vauth) Connect(renew bool) (string, error) {
 		}
 		if established.TTL > 0 && established.TTL <= float64(established.LeaseDuration)/3 {
 			if established.Renewable {
-				if err := v.trustVault(); err != nil {
+				if err := v.checkVault(); err != nil {
 					return "", err
 				}
 				renewed, err := v.renewToken(cached.Token)
@@ -295,7 +247,7 @@ func (v *Vauth) Connect(renew bool) (string, error) {
 	}
 
 	if established == nil {
-		if err := v.trustVault(); err != nil {
+		if err := v.checkVault(); err != nil {
 			return "", err
 		}
 		var granted *auth

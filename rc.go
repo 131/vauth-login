@@ -20,7 +20,7 @@ type RC struct {
 	JWTAuth    *JWTAuth `yaml:"jwt_auth"`
 	TokenCache *bool    `yaml:"token_cache"`
 	// KnownVaults lists, in ~/.vauthrc, the Vault addresses a project's
-	// ./.vauthrc may select without confirmation.
+	// ./.vauthrc is allowed to select.
 	KnownVaults []string `yaml:"known_vaults"`
 
 	// authKey is the JSON of {ssh_auth, jwt_auth} in document order, as
@@ -258,9 +258,13 @@ func LocateRC(environ map[string]string, cwd, home string) string {
 }
 
 // KnownVault reports whether addr is the vault_addr or one of the
-// known_vaults of the user's ~/.vauthrc at home. A missing or unreadable
-// file knows nothing.
+// known_vaults of the user's ~/.vauthrc at home, or the environment's
+// VAULT_ADDR. The environment is trusted even without a readable home file.
 func KnownVault(addr, home string, environ map[string]string) bool {
+	addr = strings.Trim(addr, "/")
+	if known := environ["VAULT_ADDR"]; known != "" && strings.Trim(known, "/") == addr {
+		return true
+	}
 	body, err := os.ReadFile(filepath.Join(home, ".vauthrc"))
 	if err != nil {
 		return false
@@ -269,7 +273,6 @@ func KnownVault(addr, home string, environ map[string]string) bool {
 	if err != nil {
 		return false
 	}
-	addr = strings.Trim(addr, "/")
 	for _, known := range append([]string{rc.VaultAddr}, rc.KnownVaults...) {
 		if known != "" && strings.Trim(known, "/") == addr {
 			return true

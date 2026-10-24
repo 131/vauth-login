@@ -4,7 +4,7 @@
   "description": "Standalone Vault login using ssh-agent or JWT, with encrypted interoperable token caching",
   "main": "index.js",
   "bin": {
-    "vauth-login": "./index.js"
+    "vauth-login": "./bin/vauth-login.js"
   },
   "scripts": {
     "test": "node --test test/token-cache.js",
@@ -13,7 +13,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "cnyks": "^3.2.4",
     "debug": "^4.3.4",
     "mout": "^1.2.4",
     "nyks": "^6.15.2",
@@ -35,6 +34,7 @@
   },
   "files": [
     "index.js",
+    "bin/vauth-login.js",
     "README.md",
     "API_and_tests.md"
   ]
