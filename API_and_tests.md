@@ -43,10 +43,6 @@ environment snapshot, home/cache override or agent-capture mechanism is added.
 
 ## Node
 
-Node.js 16 or newer is supported. JSON configuration copies use
-`nyks/object/structuredClone` (native when available, JSON fallback otherwise).
-CI checks syntax/module and CLI loading under Node 16 separately from the suite.
-
 ```js
 const VauthLogin = require('vauth-login');
 const client = new VauthLogin();       // .vauthrc and process environment

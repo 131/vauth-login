@@ -1,8 +1,5 @@
 # vauth-login
 
-Node.js 16 or newer is supported; CI includes Node 16 JavaScript syntax and
-module/CLI loading checks alongside the existing test suites.
-
 ## A Vault token, ready to use
 
 Authenticate to [Vault](https://developer.hashicorp.com/vault/docs) with your
