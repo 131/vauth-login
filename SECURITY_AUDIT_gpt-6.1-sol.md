@@ -1,317 +1,328 @@
-<!-- Host-verified provenance; the raw standalone reviewer output is preserved verbatim below. -->
+# Host provenance — GPT 6.1 Sol, post-publication assessment
 
-## Host-verified release-assessment provenance
+- Assessed release: **vauth-login 1.1.4**, tag `v1.1.4`, clean commit `b80d3113509f8fb065b3b78f12636b2a1cefeef5`.
+- Date: **October 25, 2026**. Publication completed and was verified **before** this independent assessment; this report is a later documentation-only publication on main, not part of the immutable release tag/npm tarball.
+- Actual execution model: **`gpt-6.1-sol_codeassist`**, provider `azure`, Codex CLI `0.164.0`, session `01a17244-8e82-74e1-b1b9-2ec6ca8dbbe2`, exit `0`. Claude prepared the exact Sol stdin; the host executed it unchanged in a new default-profile session.
+- Input SHA256: `aece5302016ca534a56d54d925c6fe03ad0902b4026056dbae6cf9448f35d859`.
+- Raw report SHA256: `61e2ad694bda1b036e8af4871ddbfbdc17892b98784fbac51d5aecea406e6eec`. The raw response is preserved byte-for-byte after the separator below.
+- Both reviewers inventoried current inputs and excluded previous assessment contents, README at every depth, personal tasks/sa materials and coordinator history. Current API documentation was isolated through headings/ranges. Host inspection of executed command inventories found no prohibited report reads. Tracked source and checked client configuration hashes were unchanged before/after reviews.
+- Supporting dependency inputs included local installed sources and an ignored local npm lockfile; that lockfile is not a committed release manifest.
+- Check scope: Sol ran Node syntax checks, gofmt and bounded stubbed/in-memory probes. It did not run ESLint, Go vet/builds or full test suites. An exploratory macro assertion failed before a distinct escaped-recursion case was verified; the report distinguishes the two.
+- Host release checks, separate from reviewer checks: 85 Node24 tests, ESLint, Go vet/race, Linux/Windows builds; successful test/publish/release CI; npm latest tarball integrity and exact source; Go proxy manifest/source; GitHub asset checksums; Linux version/help; Windows Authenticode verification.
+- Limitations and hypotheses remain the reviewer's judgments. No live vulnerability scan was performed. No real cache, agent, credentials or Vault was used in its synthetic probes. Neither scores nor findings were rewritten to agree with the other report.
 
-- Date: October 24, 2026. Clean functional source commit `41f56c1a8e7effe655e2b6034f934780f99fcdef` on `main`.
-- This snapshot has version 1.1.2; the operator-authorized patch 1.1.3 is prepared after the independent assessments through documentation-only consolidation and metadata-only ppackage versioning. The report is not an audit of downloaded release binaries.
-- Actual model: `gpt-6.1-sol_codeassist`; provider `azure`, profile `default`, Codex CLI `0.164.0`.
-- Session: `01a16f71-0128-7ee2-9edc-4364240da257`; exit status `0`.
-- Exact successful expanded stdin SHA256: `c5beea5c3142761fab406eab7eddc82876cfd3dcaf7cd6b83bdae14368d3dc06`.
-- Raw final output SHA256: `ca98db488df9605af5fd0e16fa4652ef44f255c6c3ae26b00b657212f865b125`.
-- Invocation: `codex exec --ephemeral --sandbox read-only -m gpt-6.1-sol_codeassist -c 'web_search="disabled"' --output-last-message <raw-report> -`, with exact prompt bytes supplied through stdin.
-- Exact successful input, command and provenance are maintained in `$AGENT_WORKSPACE/users/fleurent/sa/codex-sa-prompt.md`. Scratch materials: `/tmp/tasks/FLEURENT-09/release-vauth-login-20261024T194258Z/` (temporary, not durable).
-- The host verified immutable tracked source, both preexisting reports and checked client configuration/catalog files during independent analysis. Logged commands were checked for input exclusions. Models did not receive earlier findings, scores, conversation or task handoffs.
-- Claude prepared Sol's prompt without a source assessment; the host ran its bytes unchanged. Subsequent Claude coordination accepted completeness/exclusion compliance, not the correctness of every finding, and did not rewrite scores or conclusions.
-- Sol used isolated README ranges 1–132, 140–144 and 197–end and API documentation lines 1–114, confirmed by host heading inspection; prior audit sections were not emitted.
-- Sol performed syntax/format/ESLint and bounded in-memory checks, not complete runtime suites, builds, or a live vulnerability-database scan.
-- Full local release validation is separate from the reviewers' checks. This report does not certify production settings, current advisory status, artifact identity, or absence of vulnerabilities.
+- Coordination acceptance: both complete reports were checked in a separate Claude validation phase after independent outputs finished, without score/severity calibration.
+- Local-lockfile caveat: lockfile-integrity and lockfile-root-version observations concern the ignored local installation file, not the immutable published artifacts; host checks separately verified those artifacts against the tag.
+
+### Exact host command
+
+```bash
+command codex exec --ephemeral --sandbox read-only -c 'web_search="disabled"' --output-last-message /tmp/tasks/FLEURENT-09/release-vauth-login-20261025T085000Z/codex-report.md - < /tmp/tasks/FLEURENT-09/release-vauth-login-20261025T085000Z/codex-input.txt > /tmp/tasks/FLEURENT-09/release-vauth-login-20261025T085000Z/codex-run.log 2>&1
+```
+
+## Raw reviewer response
 
 ---
 
-# Independent Security Assessment — vauth-login
+# Security Assessment — vauth-login v1.1.4
 
-- **Assessed commit:** `41f56c1a8e7effe655e2b6034f934780f99fcdef`
+- **Assessed commit:** `b80d3113509f8fb065b3b78f12636b2a1cefeef5`
+- **Tag:** `v1.1.4`
 - **Branch:** `main`
-- **Assessment date:** October 24, 2026
-- **Reviewer model:** `gpt-6.1-sol_codeassist`
-- **Method:** Independent, read-only, source-only review of the current working tree and selected locally available dependency sources.
+- **Assessment date:** October 25, 2026
+- **Execution model:** `gpt-6.1-sol_codeassist`
+- **Method:** Independent, read-only, offline source assessment.
 
-## 1. Provenance
+## Provenance
 
-This assessment was derived from my own inspection of implementation code, tests, dependency manifests, and release configuration. It was not based on either existing security assessment.
+This assessment was derived from my own inspection of the current implementation, selected test bodies, dependency manifests, selected locally available dependency sources, and release workflows. Local Git metadata confirmed that HEAD and `v1.1.4` resolve to the assessed commit, with a clean working tree.
 
-Excluded inputs were not read: `SECURITY_AUDIT*.md` contents at any depth; documentation security-assessment sections; previous reports, findings, or scores; Git history and historical assessment content; personal READMEs, task indexes, handoffs, or coordination material; files under `sa/`; and dependency Markdown containing advisories or audits. Documentation headings were listed before selected non-assessment ranges were printed.
+Neither existing `SECURITY_AUDIT*.md` document was read. README files at every depth, assessment documentation, historical assessments and related commit messages, personal task indexes, prior findings and handoffs, and dependency Markdown advisories were excluded. `API_and_tests.md` was inspected by listing heading line numbers first, then reading only the isolated API and CLI sections at lines 3–137.
 
-The applicable workspace `AGENTS.md` was read for instructions only. The external checkout is unmapped, and no neighboring project rules or conclusions were adopted. Personal-context and handoff instructions were not followed where they conflicted with the explicit input exclusions.
+Publication status supplied by the operator was treated as context, not as evidence that the implementation is secure. No registry, release artifact, deployed service, credential, or live Vault was accessed. No files were modified, and no publication, versioning, deployment, or additional review session was initiated.
 
-The repository remote and assessed commit were checked locally. Public repository status, npm publication, Go distribution, and the existing GitHub release are operator-provided context, not independently reverified through network access.
+## 1. Scope and Method
 
-No files were written or modified. No credentials, real Vault services, network services, publication commands, or release operations were used. This report does not authorize release `1.1.3` or certify existing distributed artifacts.
+### Input inventory
 
-## 2. Scope and Method
+The initial repository filename inventory identified the following selected inputs:
 
-### Explicit input inventory
-
-The initial filename inventory covered repository files outside `.git` and `node_modules`. The following files were selected as reviewer inputs:
-
-| Area | Inputs |
+| Area | Selected inputs |
 |---|---|
 | Node implementation | `index.js`, `bin/vauth-login.js` |
-| Node tests | `test/token-cache.js` |
-| Go implementation | `vauth.go`, `vault.go`, `cache.go`, `rc.go`, `humandiff.go`, `cmd/vauth-login/main.go` |
-| Go tests | `vauth_test.go`, `auth_api_test.go`, `cmd/vauth-login/main_test.go` |
+| Node tests | `test/token-cache.js`, including fixture setup and selected authentication, cache, transport, CLI, and getter tests |
+| Go implementation | `vauth.go`, `vault.go`, `rc.go`, `cache.go`, `humandiff.go` |
+| Go tests | Selected bodies in `vauth_test.go`, `auth_api_test.go`, and `cmd/vauth-login/main_test.go` |
+| Go CLI | `cmd/vauth-login/main.go` |
 | Dependency manifests | `package.json`, `package-lock.json`, `go.mod`, `go.sum` |
-| Workflows | `.github/workflows/test.yml`, `.github/workflows/publish-npm.yml`, `.github/workflows/release.yml` |
-| Release configuration | `.goreleaser.yaml` |
-| Supporting configuration | `.gitignore`, `.eslintignore`, `.eslintrc`, `LICENSE` |
-| Isolated documentation | `README.md` lines 1–132, 140–144, and 197–end; `API_and_tests.md` lines 1–114 |
+| CI and release | `.github/workflows/test.yml`, `.github/workflows/publish-npm.yml`, `.github/workflows/release.yml`, `.goreleaser.yaml` |
+| API documentation | `API_and_tests.md`, lines 3–137 only |
 
-`README.md` sections headed **Security** and **Security audit** were excluded. The **Verification** section of `API_and_tests.md` was also skipped; verification conclusions below come from executable source and checks, not that section.
-
-Additional local dependency inputs were selected to inspect transport, configuration expansion, and encryption:
+Additional dependency inputs were explicitly selected after filename discovery:
 
 - `node_modules/nyks/http/request.js`
 - `node_modules/nyks/stream/drain.js`
+- `node_modules/nyks/object/{freeze,walk,jqdive}.js`
 - `node_modules/nyks/string/replaceEnv.js`
-- `node_modules/nyks/object/walk.js`
-- `node_modules/nyks/object/jqdive.js`
 - `node_modules/ssh-agent-crypt/index.js`
-- JSON package manifests for locally resolved `nyks`, `ssh-agent-crypt`, `ssh2`, `yaml`, and `semver`
-- Locally cached Go module `github.com/131/ssh-agent-crypt@v1.4.1`:
+- Package-version metadata from the installed `nyks`, `ssh-agent-crypt`, `ssh2`, and `yaml` manifests.
+- Selected cryptographic and agent-handling sections of the locally cached Go dependency `github.com/131/ssh-agent-crypt@v1.4.1`:
   - `sshagentcrypt.go`
   - `agent_unix.go`
   - `agent_windows.go`
 
-Dependency inspection was targeted, not exhaustive. The lockfile was inspected through its header and parsed package metadata, including resolution URLs, integrity fields, and install-script markers.
+Applicable instructions were read from `$AGENT_WORKSPACE/AGENTS.md` and its `monolith/AGENTS.md`. Ancestor instruction-file existence was checked. No matching internal project mapping was applied to this external checkout, and neighboring project rules were not borrowed. README and personal-context requirements were skipped under the assessment’s explicit exclusions.
 
-### Threat model
+### Review approach
 
-This is a public authentication tool, not merely a trusted local helper. Relevant boundaries include:
+The review traced:
 
-- Project-controlled configuration versus operator-approved destinations.
-- JWTs, inherited tokens, cached tokens, and SSH-agent signing operations.
-- HTTP transport between external consumers and Vault.
-- Cache confidentiality, integrity, session isolation, and token lifecycle.
-- Dependencies and automation producing publicly installed packages and binaries.
-- Long-lived SDK clients, including the pending separate `vvauth` integration.
+- Configuration precedence and authentication-only environment expansion.
+- Project-selected Vault destination checks.
+- Inherited-token, cached-token, SSH, JWT, and forced-login behavior.
+- Login and renewal response validation.
+- Token-cache encryption, naming, expiry, persistence, and interoperability.
+- Public `Connect`, `LookupSelf`, and `Request` behavior.
+- Read-only configuration and token/address readers.
+- HTTP construction, redirects, deadlines, and response buffering.
+- CI permissions, dependency installation, publication, and binary signing configuration.
 
-The prototype API is evaluated as implemented: `Connect`, `LookupSelf`, and `Request`, with language-native constructors, errors, and return values. Missing compatibility aliases are not findings.
+The threat model includes hostile network intermediaries when insecure transport is configured, malicious or compromised permitted endpoints, malformed configuration, and attackers with limited cache-file access. Arbitrary code already executing as the user is outside a meaningful SDK containment boundary: such code can directly access the environment, client token readers, and SSH agent.
 
-### Safe checks run
+### Safe local checks run
+
+Local tools were Node.js `v22.22.2` and Go `go1.24.0`, on Linux amd64.
 
 | Check | Result |
 |---|---|
-| Local Git commit, remote, and tracked working-tree status | Commit and remote matched the supplied context; tracked tree remained clean |
-| Tool versions | Node `v22.22.2`; Go `go1.24.0 linux/amd64`, with `GOTOOLCHAIN=local`, `GOPROXY=off`, and `GOSUMDB=off` |
-| `node --check` on the implementation, CLI, and test file | Passed |
-| `gofmt -l` on explicitly selected Go files | No formatting discrepancies |
-| ESLint on the three selected JavaScript files, using the installed executable and `--no-cache` | Passed |
-| Parsed local lockfile inspection | 268 package entries; recorded resolution URLs were npm-registry URLs; resolved entries had integrity fields |
-| In-memory Node probes, without constructors, filesystem access, agents, or transport | Confirmed unchanged trust after destination mutation, reuse of cache metadata missing expiry, and acceptance of a non-string login token |
+| Git HEAD, branch, remote, tag target, and status inspection | Expected commit and tag; clean working tree |
+| `node --check index.js` | Passed |
+| `node --check bin/vauth-login.js` | Passed |
+| `node --check test/token-cache.js` | Passed |
+| `gofmt -l` over selected Go implementation and test files | No filenames reported |
+| In-memory lockfile inspection | 267 non-root package entries; all had integrity metadata and HTTPS resolution URLs |
+| Installed dependency-version inspection | Selected installed versions matched their lockfile entries |
+| Stubbed Node `Request` | Accepted a plaintext HTTP target without opening a socket |
+| Stubbed Node cache reuse | Accepted an entry missing `expires_at` |
+| Repeated Node connection check | Established connection bypassed subsequent cache processing |
+| Nested Node RC immutability check | Passed |
+| In-memory malformed-YAML check | Parser exception contained a synthetic credential marker; marker was not printed |
+| Cyclic YAML authentication subtree | Parsed and froze, then recursive traversal raised `RangeError` |
+| Escaped recursive environment macro | Raised `RangeError` |
+| Source-equivalent cache-key comparison | Explicit null authentication member produced different Node/Go key representations |
 
-An additional exploratory assertion predicting a `RangeError` for a cyclic macro did **not** hold. A follow-up probe showed that the expression returned a changed value. That experiment does not support a cyclic-expansion finding and is not counted as a passing security check.
+The probes used synthetic values, an empty process environment, virtual configuration reads, and a stubbed transport. They did not decrypt a real cache or contact an agent.
+
+An initial exploratory assertion incorrectly expected an ordinary self-referential macro to recurse. It failed because JavaScript replacement-string handling changed the expansion. That result was not treated as a finding; a separate escaped recursive case was subsequently verified.
 
 ### Checks not run
 
-- **`node --test`, `npm test`, and `go test`:** The suites create temporary files, generate keys, launch SSH agents, and open loopback listeners. Some tests also invoke Go tooling. These operations do not meet this invocation’s read-only/no-network constraints.
-- **`go vet` and Go builds:** They can create build-cache or temporary artifacts; no writable build environment was authorized.
-- **Dependency installation, `npm audit`, `govulncheck`, and remote advisory lookups:** Installation would write files, and current advisory checks would require external information or network access.
-- **Real Vault, SSH-agent, JWT, TLS, Windows, signing-server, or consumer integration tests:** They require resources outside the permitted review.
-- **Publication, packaging, release, and artifact verification:** Not authorized and not performed.
+- **`node --test`, `npm test`, and `go test`:** The test setup creates files, generates keys, starts SSH agents, and opens loopback listeners. Those operations were outside this strictly read-only, no-network execution.
+- **`go vet`, Go builds, and race tests:** These ordinarily require writable build-cache or temporary output. They were not run by bypassing the sandbox or redirecting writes elsewhere.
+- **ESLint:** Not executed; this review used syntax checks and source inspection rather than loading the lint-plugin execution path.
+- **`npm install`, `npm ci`, `go mod download`, `npm audit`, and live vulnerability scanners:** Not authorized.
+- **Release reproduction, Windows execution, signature verification, and artifact comparison:** Not performed in this independent source-only phase.
 
-Test source was reviewed as evidence of intended coverage, not as evidence that tests passed during this assessment.
+Accordingly, this document does not claim that the full test suites passed during this assessment.
 
-## 3. Prioritized Findings
+## 2. Prioritized Findings
 
-Severity reflects public distribution and plausible consumer use. A **verified observation** is supported by source or a safe local probe; it does not imply that an end-to-end exploit was executed.
+Severity reflects the stated prerequisites, not merely the presence of a missing safeguard. “Verified observation” means the behavior is supported by source or a safe local check; it does not imply demonstrated exploitation.
 
-### F1 — High: Credential-bearing requests permit plaintext HTTP
+### F1 — High: Non-loopback plaintext HTTP can carry authentication credentials
 
-**Classification:** Verified observation.
+**Classification:** Verified observation; impact conditional on configuration.
 
-**Evidence**
+**Evidence:**
 
-- `index.js:286–301` constructs the request from the configured address without requiring HTTPS.
-- `index.js:293` attaches `X-Vault-Token`; `index.js:207–209` sends JWT authentication payloads.
-- Local `node_modules/nyks/http/request.js:63` selects the HTTP transport unless the protocol is `https:`.
-- `vault.go:55–65` constructs and sends requests, including token headers, without enforcing HTTPS.
-- `vauth.go:251–256` sends JWT login data through that transport.
+- `index.js:293–309` constructs the URL and passes its protocol to the HTTP dependency without enforcing HTTPS.
+- `node_modules/nyks/http/request.js:63` selects HTTP when the protocol is not HTTPS.
+- `vault.go:55–65` constructs and sends requests without an HTTPS policy.
+- JWT login sends credentials at `index.js:214–216` and `vauth.go:258–263`.
+- Explicit tokens are placed in `X-Vault-Token` at `index.js:301` and `vault.go:62–63`.
 
-**Impact**
+A stubbed local check confirmed that Node `Request` accepts an HTTP destination.
 
-An approved address can still use `http://`. Destination approval does not provide confidentiality or authenticate the server. On an observable or attacker-controlled network path, bearer tokens and JWTs can be captured, and authentication responses can be altered.
+**Impact:** A configured or allowlisted non-loopback HTTP endpoint exposes bearer tokens and JWT login material to network observation and modification. The project-address allowlist establishes destination approval, not transport confidentiality or authenticity.
 
-The SSH flow also receives and signs challenges over this transport. This assessment does not establish a separate cross-protocol signature exploit, but plaintext transport weakens the authenticity of those challenges.
+**Suggested fix:** Require HTTPS by default. Permit loopback HTTP only through a narrowly defined development exception or explicit insecure-transport setting. Validate the scheme centrally before any authentication request.
 
-**Suggested fix**
-
-Require HTTPS by default before any credential-bearing request. If development HTTP is necessary, expose an explicit insecure option and narrowly restrict automatic exceptions to loopback destinations. Add equivalent Node and Go tests proving that ordinary remote HTTP addresses are refused before sending credentials.
-
-### F2 — Medium: Destination trust is a construction-time flag, not a binding to the current address
-
-**Classification:** Verified observation; exploitability depends on consumer-controlled address mutation.
-
-**Evidence**
-
-- `index.js:84–88` records `_safe_vault` during construction.
-- `index.js:99–101` checks only that boolean.
-- `index.js:286–299` uses the current, mutable `VAULT_ADDR`.
-- `vauth.go:139–142` records `unknownVault` during construction.
-- `vauth.go:179–183` checks only that flag.
-- `vault.go:36–65` uses the current, exported `VaultAddr`.
-- An in-memory Node probe confirmed that changing the address does not invalidate the recorded trust decision.
-
-**Impact**
-
-An SDK consumer can initialize a client for an approved destination, subsequently assign an address from less-trusted input, and send a token or JWT to the new destination while retaining the old approval.
-
-This is not an arbitrary remote bypass in the standalone CLI: it requires mutation by embedding code. It is nevertheless relevant to external integrations that reuse clients or switch destinations.
-
-**Suggested fix**
-
-Bind approval to an immutable normalized destination, or revalidate the actual destination on every request. Provide an explicit reconfiguration operation that recomputes trust and clears connection state. Add tests for destination mutation after construction and after token acquisition.
-
-### F3 — Medium: Resource limits do not cover all response and connection paths
+### F2 — Medium: Node configuration errors can echo credential-bearing source lines
 
 **Classification:** Verified observation.
 
-**Evidence**
+**Evidence:**
 
-- `index.js:301–302` drains the complete HTTP response.
-- Local `node_modules/nyks/stream/drain.js:12–26` accumulates chunks without a byte limit.
-- `vault.go:70` uses unrestricted `io.ReadAll`.
-- Local `node_modules/nyks/http/request.js:111–119` starts its deadline after the request emits `finish`, rather than before connection establishment.
-- `vault.go:123–150` performs SSH-agent connection, listing, and signing without setting a connection deadline.
-- Go dependency `agent_unix.go:11–12` uses `net.Dial`; `agent_windows.go:22–23` supplies no pipe timeout.
+- `index.js:75–77` directly parses the complete configuration document.
+- `bin/vauth-login.js:25–26` prints the resulting exception message.
+- An in-memory malformed inline `jwt_auth` document caused the installed YAML parser’s exception message to include a synthetic credential marker from that line.
 
-**Impact**
+**Impact:** A syntax error can disclose a literal JWT or other sensitive configuration content to stderr, terminal capture, CI logs, or support transcripts. Status-only HTTP errors do not protect this separate parser-error path.
 
-A malfunctioning or compromised approved endpoint can cause excessive memory consumption by returning a large body. HTTP response deadlines do not substitute for byte limits.
+**Suggested fix:** Catch configuration-parser exceptions at the configuration boundary and emit a sanitized filename, line/column, and generic error description without a source excerpt. Apply similar sanitization to other externally influenced diagnostics. Add regression tests using synthetic sensitive markers.
 
-A stalled connection or SSH-agent exchange can also delay or block authentication beyond the intended response deadline. This matters especially for SDKs embedded in services or automation.
-
-**Suggested fix**
-
-Introduce configurable response-size limits, with small defaults for authentication responses. Bound connection establishment and agent exchanges as well as HTTP response reading. Where practical, provide cancellation or context support for SDK calls. Test oversized bodies and stalled connection/agent paths.
-
-### F4 — Medium: npm dependency resolution is not reproducible from the assessed commit
-
-**Classification:** Verified observation; supply-chain compromise is a conditional risk, not an observed incident.
-
-**Evidence**
-
-- `.gitignore:2` ignores `package-lock.json`; a local Git query confirmed that it is untracked.
-- The local lockfile identifies version `1.1.1` at `package-lock.json:3,9`, whereas `package.json:3` identifies `1.1.2`.
-- `package.json:15–29` permits dependency ranges.
-- `.github/workflows/test.yml:18` and `.github/workflows/publish-npm.yml:23` use `npm install`.
-- Local lock metadata records install scripts for `ssh2` and `cpu-features`.
-
-**Impact**
-
-A clean checkout cannot reproduce the local dependency graph from this commit. Separate CI runs can resolve different permitted versions, and installation executes dependency-provided code.
-
-The ignored lockfile’s integrity values describe local resolutions; they are not a committed release baseline. This does not demonstrate a known vulnerable dependency, but it weakens reproducibility and the evidential connection between reviewed source and publication.
-
-**Suggested fix**
-
-Commit a current lockfile and use `npm ci` in test and publication workflows. Review dependency changes explicitly, including install scripts. Keep the distinction clear: a repository lockfile stabilizes CI, while public library consumers may still resolve dependency ranges differently.
-
-### F5 — Medium: Release execution trusts mutable external references
-
-**Classification:** Verified observation; exploitation requires compromise or alteration of a referenced upstream component.
-
-**Evidence**
-
-- Workflow actions use movable major-version references such as `actions/checkout@v4` and `actions/setup-go@v5`.
-- `.github/workflows/release.yml:22–26` checks out executable helper code from `131/gh-actions` at `ref: v1`.
-- `.github/workflows/release.yml:27–30` uses `goreleaser/goreleaser-action@v6` and a floating GoReleaser version range.
-- `.goreleaser.yaml:18–19` executes the external signing helper.
-- `.github/workflows/release.yml:31–33` supplies `GITHUB_TOKEN` and `SIGNING_SERVER` to the release process.
-
-**Impact**
-
-Release behavior can change without a change to this repository. Compromised helper or action code could alter public binaries or misuse release/signing capabilities.
-
-Checksums detect corruption only relative to a trusted checksum source; they do not establish that a compromised release process produced trustworthy software.
-
-**Suggested fix**
-
-Pin actions and executable helper checkouts to reviewed commit hashes, and pin the release tool version. Update pins through reviewed changes. Minimize credential exposure and add independently verifiable build provenance or attestations.
-
-### F6 — Low: Cached credentials are not cryptographically bound to their session filename
-
-**Classification:** Verified observation; cross-session consequences are conditional.
-
-**Evidence**
-
-- `index.js:104–112` and `cache.go:25–36` encode the Vault/authentication configuration in a hashed filename.
-- `index.js:132–135` and `cache.go:16–20` store no session identifier or destination in the encrypted payload.
-- `index.js:119–120` and `cache.go:47–59` decrypt and accept the payload without verifying its association with the selected session.
-- The encryption dependency authenticates its armor, not the caller’s cache filename.
-
-**Impact**
-
-Filename separation prevents accidental ordinary lookup collisions, but does not reject an intact encrypted cache copied into another session’s filename.
-
-An actor able to replace cache files—or an incorrect restore operation—could substitute a credential from a different configuration. A later renewal or external consumer request might then send that credential to an unintended destination.
-
-This requires cache replacement access and a decryptable copied entry; it is not a demonstrated remote attack or a break of ciphertext authentication.
-
-**Suggested fix**
-
-Include a versioned session identifier inside the authenticated payload and compare it with the current session before reuse. Add transplantation tests between different destinations and authentication configurations.
-
-### F7 — Low: Node cache and login response validation is incomplete
+### F3 — Medium: HTTP response buffering has no byte limit
 
 **Classification:** Verified observation.
 
-**Evidence**
+**Evidence:**
 
-- `index.js:119–120` accepts any JSON returned by decryption.
-- `index.js:175–184` uses cache fields without enforcing a schema.
-- `cache.go:55–59` checks JSON decoding and a nonempty token, but does not distinguish omitted expiry from explicitly unlimited expiry.
-- `index.js:229–231,280–282` checks token truthiness, not that `client_token` is a string.
-- `vault.go:94–103` is stricter about token type and explicit lease presence.
-- In-memory Node probes confirmed reuse of cache metadata with omitted expiry and acceptance of an object-valued login token.
+- `index.js:309–310` drains the entire response.
+- `node_modules/nyks/stream/drain.js:12–26` retains every chunk and concatenates them.
+- `vault.go:69–70` uses unrestricted `io.ReadAll`.
 
-**Impact**
+**Impact:** A malicious or compromised permitted endpoint can send a large response quickly enough to exhaust memory within the configured deadline. Both success and error responses are affected; constructing an HTTP error may also create an additional string representation.
 
-Malformed but authenticated cache data can bypass intended expiry interpretation. Node may return a value that violates its documented token contract, causing downstream failures or inconsistent behavior between implementations.
+**Suggested fix:** Enforce an explicit response-size limit while streaming, close or destroy oversized responses, and return a sanitized size-limit error. Use a configurable SDK limit and a conservative authentication-response default. A time limit is not a memory limit.
 
-Normal writers produce the expected fields, so this is principally a malformed-data, migration, or consumer-boundary robustness issue rather than an ordinary unauthenticated cache-tampering attack.
+### F4 — Medium: Cache ciphertext is not authenticated to its Vault/configuration context
 
-**Suggested fix**
+**Classification:** Hypothesis grounded in verified source structure.
 
-Validate a versioned cache schema, including token type, required expiry semantics, lease range, and renewable type. Reject malformed cache entries as misses. Require a nonempty string `client_token` in Node login and renewal responses, and add shared malformed-input fixtures.
+**Evidence:**
 
-## 4. Strengths
+- Configuration context determines the filename through `index.js:111–119` and `cache.go:25–36`.
+- The encrypted plaintext contains token and lifetime metadata, but no context identifier: `index.js:138–145`, `cache.go:16–20,66–71`.
+- Reads decrypt the file selected by the current context without checking an embedded context: `index.js:122–127`, `cache.go:43–59`.
+- The dependency authenticates its armor, but does not receive the Vault/configuration cache key as authenticated context.
 
-- **Small, coherent public API.** Both implementations expose the intended client methods without a broad command-dispatch surface.
-- **Restrained CLI behavior.** Unknown arguments are rejected before credential output; help and version paths avoid configuration loading.
-- **Useful project-address protection.** Unknown project-selected Vault addresses are refused before HTTP requests under normal construction and unchanged configuration.
-- **Redirect protection by default.** Node does not enable redirect following; Go’s default client returns redirects without following them.
-- **Encrypted, authenticated cache writes.** The inspected v3 dependency uses random salt and IV, separate encryption/MAC derivation, and constant-time authentication checks before decryption.
-- **Private and replace-based persistence.** Cache writers request restrictive POSIX modes and use distinct temporary files followed by replacement.
-- **Nonfatal persistence failure.** Cache errors do not discard an otherwise acquired token, and diagnostics avoid printing token contents.
-- **Deliberate inherited-token handling.** Inherited tokens are returned without lookup, renewal, or persistence unless fresh authentication is requested.
-- **Controlled renewal fallback.** Renewal failures trigger reauthentication for 400/403 responses rather than indiscriminately generating new tokens after server failures.
-- **Substantial test intent.** Tests cover lifecycle thresholds, cache disabling, plaintext-cache rejection, destination refusal, argument handling, response validation, and diagnostic secrecy.
-- **Release safeguards are present.** Test/publication permissions are restricted, the binary release job names a production environment, and release configuration includes checksums and a Windows signing hook.
+**Impact:** An attacker able to read one valid encrypted cache and substitute it at another cache path may cause the same user’s agent to decrypt and reuse that token under a different configuration. A subsequent request could send it to a different permitted Vault.
 
-These are source observations. Runtime success, Windows signing validity, and production-environment enforcement were not verified.
+This requires cache access and a usable matching agent key. No ciphertext-substitution attack was executed, and this is not a remote cache-forgery claim.
 
-## 5. Limitations
+**Suggested fix:** Include a versioned context identifier inside the authenticated encrypted payload and verify it before reuse. The identifier should bind the selected Vault and authentication configuration. Keep the hashed filename as indexing, not as the only context binding.
 
-- No test suite, real authentication flow, or distributed artifact was executed or validated.
-- Current dependency vulnerability status is unknown. Versions and integrity metadata are not a substitute for advisory analysis.
-- The local npm dependency tree and ignored lockfile are supplemental working-tree inputs, not committed dependency provenance.
-- Cryptographic inspection was targeted; it is not a formal review of `ssh-agent-crypt`. Its decryptors also accept legacy formats, which were not independently exercised.
-- POSIX mode arguments do not establish equivalent Windows ACL protection.
-- Repository settings such as tag protection, environment approvals, npm trusted-publisher policy, and signing-server controls are unavailable from source alone.
-- Go’s exported custom `HTTPClient` can change redirect, timeout, and TLS behavior. Consumers must preserve the intended security properties.
-- `Connect(false)` is not an online token-validity guarantee. Cache reuse deliberately skips revocation checks, and an already connected instance returns its token without re-evaluating expiry. Consumers needing current validity must use `LookupSelf` or an explicitly designed lifecycle policy. Vault remains responsible for enforcing expiry and revocation.
-- SSH authentication signs server-provided nonces and tries agent identities. The Vault plugin protocol and server-side challenge protections were outside scope.
-- Cache-key and armor compatibility have source-level support, but the inspected tests do not establish comprehensive bidirectional Node/Go interoperability across versions, configurations, and real Windows transports.
-- The pending `vvauth` consumer was not read. Its destination handling, token lifecycle, cancellation, concurrency, and logging behavior require separate integration verification.
-- Independent npm, Go-tag, and binary publication can partially succeed. This assessment does not establish coordinated channel consistency or validate the proposed release metadata.
-- Scores are qualitative judgments of this snapshot, not certifications or probabilities.
+### F5 — Medium: Release jobs execute mutable external references
 
-## 6. Scores
+**Classification:** Verified observation; compromise scenario is hypothetical.
 
-| Category | Score | Justification |
+**Evidence:**
+
+- Workflow actions use mutable major tags:
+  - `.github/workflows/test.yml:14–15,30–31`
+  - `.github/workflows/publish-npm.yml:15–20`
+  - `.github/workflows/release.yml:15–18,22–27`
+- The signing helper is checked out from `131/gh-actions` at `ref: v1`: `.github/workflows/release.yml:22–26`.
+- GoReleaser is selected through a version range: `.github/workflows/release.yml:27–30`.
+- The release job receives the GitHub token and signing-server secret: `.github/workflows/release.yml:31–33`.
+- Node jobs use `npm install`, rather than a fail-on-lock-drift installation: test workflow line 18 and publish workflow line 23.
+
+**Impact:** Compromise or unexpected movement of an action/helper reference can affect privileged release execution. Dependency resolution is also less strictly enforced than with `npm ci`. No compromised component was identified.
+
+**Suggested fix:** Pin actions and the signing-helper checkout to reviewed immutable commit IDs, pin the release tool version, and use `npm ci` with a synchronized lockfile. Maintain controlled update automation and narrowly scoped release permissions.
+
+The actual contents of the external signing helper and repository environment protections were unavailable to this review.
+
+### F6 — Low: Decrypted cache metadata is insufficiently validated
+
+**Classification:** Verified observation.
+
+**Evidence:**
+
+- Node accepts any successfully decrypted, JSON-parsed value at `index.js:122–128`.
+- Node lifetime decisions assume usable cache fields at `index.js:181–191`.
+- Go validates JSON decoding and a nonempty token, but not field presence or lifetime consistency: `cache.go:55–59`.
+- Go’s missing `expires_at` becomes a nil pointer, which the connection path treats as unlimited: `vauth.go:225–234`.
+
+A stubbed Node cache with no `expires_at` was accepted.
+
+**Impact:** Authenticated but malformed, old, or incorrectly produced cache entries can bypass intended expiry handling or produce invalid SDK return values. In Node, missing expiry produces a non-finite computed TTL that does not trigger the renewal threshold. In Go, missing expiry is indistinguishable from explicit unlimited validity.
+
+Encryption prevents arbitrary unauthenticated JSON substitution; this finding does not negate that protection.
+
+**Suggested fix:** Validate a versioned schema after decryption: nonempty string token, valid lease duration, boolean renewable field, and explicitly present expiry. Distinguish missing expiry from deliberate unlimited validity and reject inconsistent entries as cache misses.
+
+### F7 — Low: Established clients do not re-evaluate token expiry
+
+**Classification:** Verified observation.
+
+**Evidence:**
+
+- Node immediately returns the established token at `index.js:162–164`.
+- Go does the same at `vauth.go:205–207`.
+- Existing reuse tests intentionally assert this short-circuit behavior.
+
+**Impact:** A long-lived SDK client can keep returning an expired or revoked token from `Connect(false)`. The expiry and last-third renewal logic applies when establishing a connection, not on every subsequent call.
+
+This does not extend a token’s server-side privileges or validity; Vault can still reject it. It is primarily an availability and integration hazard.
+
+**Suggested fix:** Track established-token expiry and re-enter the renewal/login path when appropriate. Preserve the documented offline treatment of inherited tokens, and make clear that returning a token is not proof of current server-side validity.
+
+### F8 — Low: Recursive Node configuration processing can fail on accepted structures
+
+**Classification:** Verified observation.
+
+**Evidence:**
+
+- `index.js:85` recursively walks the cloned authentication view.
+- `node_modules/nyks/object/walk.js:8–10` has no cycle detection.
+- `node_modules/nyks/string/replaceEnv.js:23–24` recursively expands without a depth bound.
+- Go bounds macro expansion to 16 iterations at `rc.go:135–154`.
+
+Safe local checks confirmed that a cyclic YAML authentication subtree reaches a traversal `RangeError`, and an escaped recursive macro also reaches a `RangeError`.
+
+**Impact:** Malformed or hostile project configuration can prevent client construction through stack exhaustion. Recursive processing is inconsistent between the implementations.
+
+**Suggested fix:** Validate configuration structure, reject cyclic authentication subtrees, and bound traversal and macro expansion. Return sanitized configuration errors rather than raw stack failures.
+
+### F9 — Low: Interoperability and release metadata have concrete edge-case drift
+
+**Classification:** Verified observation; interoperability consequence derived from source.
+
+**Evidence:**
+
+- Node serializes explicit null authentication members into its cache-key input: `index.js:112–115`.
+- Go skips null authentication members: `rc.go:323–326`.
+- `package.json:3` declares `1.1.4`, while `package-lock.json:3,9` retains `1.1.3`.
+
+A source-equivalent comparison confirmed different cache-key inputs when one authentication member is explicitly null.
+
+**Impact:** A document containing a valid JWT authentication section and `ssh_auth: null` can produce separate Node and Go cache files, causing extra logins rather than interoperable reuse. The stale lockfile root version is a reproducibility and maintenance inconsistency, not evidence that the wrong package was published.
+
+**Suggested fix:** Define and test canonical cache-key handling for missing, null, empty, and reordered authentication members. Synchronize lockfile root metadata in a future authorized change. Preserve context isolation when changing key normalization.
+
+## 3. Strengths
+
+- **Destination checks precede requests.** Unknown project-selected Vaults are rejected in Node `Request` and Go `Request`, including login, renewal, and lookup operations. There is no interactive acceptance bypass.
+- **Default transports refuse redirects.** Node does not enable dependency redirect following; Go explicitly returns `http.ErrUseLastResponse`. This reduces credential forwarding through redirected requests.
+- **Normal HTTP errors avoid body disclosure.** Error messages report status, while response bodies remain available to SDK callers. Node makes its body property non-enumerable.
+- **Cache writes are encrypted and atomic.** Both implementations use temporary files and rename; newly created Unix cache files/directories request restrictive permissions.
+- **Current cache encryption authenticates ciphertext.** The inspected `ssh-agent-crypt` v3 implementations use random salt and IV, separate encryption/MAC keys, HMAC verification before decryption, and constant-time MAC comparison. CBC is not used unauthenticated.
+- **Current cryptographic derivation is namespaced.** The dependency uses an SSHSIG envelope with a dedicated namespace and supports deterministic RSA/Ed25519 derivation.
+- **Inherited-token handling is conservative.** Ordinary connection returns an inherited token offline without lookup, renewal, or persistence. Forced login does not silently reuse it.
+- **Renewal failure handling is restrained.** Invalid-token statuses permit reauthentication; network/server renewal failures are propagated rather than automatically generating additional credentials.
+- **Login/renewal responses require usable metadata.** Both implementations reject missing or negative lease durations and missing tokens; lookup requires TTL.
+- **Configuration readers protect internal state.** Node recursively freezes the complete parsed document; Go returns independently decoded snapshots. Authentication expansion operates separately from the public document view.
+- **CLI dispatch is narrow.** Unknown arguments are rejected before configuration loading or credential output. Help and version avoid authentication initialization.
+- **Tests cover security-relevant behavior.** Inspected cases cover destination refusal, redirects, stalled responses, plaintext-cache rejection, cache permissions, inheritance, renewal errors, CLI output, and immutable readers.
+- **CI has useful separation and checks.** Test workflows have read-only repository permissions; publication workflows include tests; Go checks cover Linux and Windows builds. Release configuration includes checksums and a Windows signing hook.
+- **Dependency manifests provide integrity metadata.** The inspected npm lockfile entries have integrity values and HTTPS resolution URLs; Go dependencies have pinned module versions and checksums.
+
+These are source observations and inspected test intentions, not substitutes for executing the tests or validating operational controls.
+
+## 4. Limitations
+
+- **No network access and no live vulnerability-database scanning were performed.** This assessment cannot establish that the direct or transitive dependency graph is free of known vulnerabilities.
+- Dependency inspection was selective, not a complete audit of YAML, SSH, HTTP, cryptographic, operating-system, or transitive dependency implementations.
+- Locally installed dependency versions were checked against lockfile metadata, but their complete contents were not independently verified against registry artifacts.
+- Full tests, race detection, builds, and `go vet` were not executed under this execution’s restrictions.
+- Windows agent behavior, ACLs, cache replacement semantics, and signed binaries were not dynamically validated. Unix mode arguments do not establish Windows ACL protection or repair pre-existing directory permissions.
+- No real Vault policy, SSH authentication plugin, JWT issuer/audience policy, TLS configuration, or deployment was assessed.
+- SSH login signs the server-provided nonce directly (`index.js:254–261`, `vault.go:134–159`). Server challenge generation and cross-protocol resistance depend on an unreviewed plugin/protocol. No cross-protocol attack was demonstrated.
+- Agent operations do not show explicit application deadlines in the inspected paths. HTTP response deadlines therefore do not establish a bound for the entire authentication operation.
+- A caller-supplied Go `HTTPClient` can replace default redirect and timeout behavior. The default-client strengths do not automatically apply to custom clients.
+- Cache encryption protects storage, not a process already able to use the relevant agent or read returned tokens. It also does not provide replay prevention.
+- RC intentionally exposes the complete document, potentially including literal credentials. “Read-only” means immutable state, not redacted content.
+- External signing-helper code, branch/tag protections, npm trusted-publisher settings, production-environment approvals, and signing-service authorization were not available as source inputs.
+- The prototype API is not assumed to be concurrency-safe or compatibility-stable. No separate consumer, including `vvauth`, was inspected.
+- The operator’s successful publication checks were not reused as security proof.
+
+## 5. Scores
+
+| Dimension | Score | Justification |
 |---|---:|---|
-| **Coolness** | **17/20** | A compact cross-language Vault client, raw-token CLI, SSH-agent authentication, and shared encrypted caching make a useful and distinctive integration tool. |
-| **Robustness** | **13/20** | Clear lifecycle logic and extensive test intent are offset by incomplete validation, resource bounds, long-lived-client behavior, and unverified runtime/platform interoperability. |
-| **Safety** | **13/20** | Cache authentication, restrained logging, destination approval, and redirect protection are meaningful safeguards. Plaintext credential transport, mutable destination trust, and release/dependency provenance gaps remain material concerns for public adoption. |
+| **Coolness** | **17/20** | A compact dual-language SDK/CLI with SSH-agent-backed encrypted caching, JWT support, aligned public methods, and a practical native release pipeline. |
+| **Robustness** | **13/20** | Good failure handling and substantial regression coverage, offset by unlimited buffering, weak cache-schema validation, established-token expiry shortcuts, and configuration/interoperability edge cases. Full tests were not executed here. |
+| **Safety** | **12/20** | Destination approval, redirect refusal, authenticated cache encryption, and restrained normal logging are valuable. Plaintext transport, parser-error disclosure, unbound cache context, and mutable privileged release inputs leave meaningful conditional risks. |
 
-**Overall assessment:** The implementation has a focused design and meaningful security controls, but it should not be treated as hardened solely because authentication and cache reuse work in ordinary cases. HTTPS enforcement is the highest-priority correction, followed by binding trust to the actual request destination, bounding resource use, and strengthening dependency and release provenance.
+**Overall assessment:** The released source contains useful security controls, but those controls do not justify treating successful publication as a security proof. The highest-priority future changes are secure transport enforcement and sanitized configuration errors, followed by response limits, authenticated cache-context binding, strict cache validation, and immutable release inputs. This assessment authorizes no software change or further release.

@@ -154,7 +154,7 @@ contract remains unchanged.
 
 ## Security audit
 
-Two fresh independent source assessments accompany the 1.1.3 release:
+Two fresh independent source assessments cover the published 1.1.4 release:
 [SECURITY_AUDIT_fable-5.1.md](SECURITY_AUDIT_fable-5.1.md) and
 [SECURITY_AUDIT_gpt-6.1-sol.md](SECURITY_AUDIT_gpt-6.1-sol.md).
 
@@ -162,35 +162,37 @@ Two fresh independent source assessments accompany the 1.1.3 release:
 | --- | ---: | ---: |
 | ✨ **Coolness** | 15/20 | 17/20 |
 | Robustness | 13/20 | 13/20 |
-| Safety | 14/20 | 13/20 |
+| Safety | 13/20 | 12/20 |
 
-Both were generated on October 24, 2026 from clean functional commit `41f56c1`,
-before documentation-only consolidation and metadata-only ppackage patch
-versioning. The host confirmed models `claude-fable-5-1` and
-`gpt-6.1-sol_codeassist`, exact inputs, source immutability and read exclusions.
-Prior reports, scores and task handoffs were not source-review inputs. An
-invalid Claude attempt was discarded; the successful fresh invocation excluded
-README entirely. Sol read isolated non-assessment documentation ranges.
-Each published report preserves the raw reviewer response after a separate
-host provenance block; check-scope caveats are explicit.
+Both were generated on October 25, 2026 from clean release commit `b80d311`
+(tag `v1.1.4`), **after publication**, as requested. These reports are published
+on the repository's main branch, not retroactively inserted into the release
+tag or npm tarball; the tagged README retains the earlier 1.1.3 assessments.
 
-The three-method client API and shared HTTP trust guard were assessed as
-implemented. Remaining findings include plaintext HTTP acceptance, mutable
-address/trust state, resource limits, cache validation/isolation and release
-supply-chain controls. Severity and hypotheses remain each reviewer's own
-judgments. Reports and scores were not rewritten for agreement; neither is
-certification or a live vulnerability-database clearance.
+The host confirmed models `claude-fable-5-1` and `gpt-6.1-sol_codeassist`, exact
+inputs, source immutability and read exclusions. Claude prepared the Sol stdin;
+each reviewer independently examined current source without the other report,
+prior assessments, scores, task handoffs or README content. Both raw reports
+are preserved after separate host-provenance blocks; their findings and scores
+are not rewritten for agreement.
 
-Reviewer checks differ: Sol ran syntax/format/ESLint and bounded offline probes;
-Claude ran syntax/format/ESLint, offline Go vet and Linux/Windows builds using
-scratch compiler files. Neither completed full integration suites under the
-review sandbox. The host provenance distinguishes temporary filesystem writes
-and blocked socket probes from actual suite execution.
+Sol ran syntax/format checks and bounded offline probes; it did not execute full
+suites, Go vet or ESLint. Fable ran ESLint, formatting and offline Go vet plus
+synthetic macro probes, using temporary compiler files. Its Node/Go suite
+attempts were blocked by sandbox socket binding, not product regressions or
+successful suite execution. Local installed dependency sources and an ignored
+lockfile were support inputs, not a committed release lockfile. Each report's
+host provenance separates these limits from the raw reviewer observations.
 
-Separate release validation passes all 81 Node tests on Node 24, ESLint, Go
-vet/race tests, Windows compilation and Node/Go CLI output comparisons. These
-are host validation results, not tests silently attributed to the assessments.
-Published package/binary identity is verified separately during publication.
+Separate host validation passes 85 Node tests on Node 24, ESLint, Go vet/race
+and Linux/Windows compilation. Publication validation confirms all three CI
+workflows succeeded, npm latest and tarball integrity/source, Go proxy source,
+GitHub binary checksums, Linux CLI version/help and Windows Authenticode
+signature. These are host checks, not tests attributed to the reviewers.
+
+The assessments are source-only reviews, not certification or live
+vulnerability-database clearance. Review each report's evidence, hypotheses
+and check-scope limitations before interpreting its scores.
 
 ## Credits
 
