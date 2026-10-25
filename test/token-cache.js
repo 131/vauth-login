@@ -1171,3 +1171,38 @@ test('subclasses can add their own state without freezing or sealing the client 
   assert.equal(v.RC.env.map.KEY, 'value');
   assert.equal(v.config.map.KEY, 'consumer-value');
 });
+
+test('RC snapshot retains YAML dates as strings and rejects non-JSON numbers', t => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'vauth-json-rc-'));
+  t.after(() => fs.rmSync(project, {recursive : true, force : true}));
+  const file = path.join(project, 'fixture.vauthrc');
+  const script = `const V = require(${JSON.stringify(path.resolve(__dirname, '..', 'index.js'))}); process.stdout.write(JSON.stringify(new V().RC));`;
+  const env = {...process.env, HOME : project, VAUTHRC : file, VAULT_TOKEN : '', VAULT_ADDR : '', SSH_AUTH_SOCK : ''};
+  fs.writeFileSync(file, 'extra: {date: 2026-01-01, timestamp: 2026-01-01T00:00:00Z, yes: yes}\n');
+  const parsed = spawnSync(process.execPath, ['-e', script], {cwd : project, env, encoding : 'utf8'});
+  assert.equal(parsed.status, 0, parsed.stderr);
+  assert.deepEqual(JSON.parse(parsed.stdout).extra, {date : '2026-01-01', timestamp : '2026-01-01T00:00:00Z', yes : 'yes'});
+  for(const value of ['.inf', '.nan']) {
+    fs.writeFileSync(file, `extra: [${value}]\n`);
+    const result = spawnSync(process.execPath, ['-e', script], {cwd : project, env, encoding : 'utf8'});
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Configuration is not JSON-compatible/);
+  }
+});
+
+test('configuration discovery uses the environment at construction like Go New', t => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'vauth-late-rc-'));
+  t.after(() => fs.rmSync(project, {recursive : true, force : true}));
+  const file = path.join(project, 'fixture.vauthrc');
+  fs.writeFileSync(file, JSON.stringify({vault_addr : 'https://late.example.test', extra : {kept : true}}));
+  const previous = process.env.VAUTHRC;
+  try {
+    process.env.VAUTHRC = file;
+    const v = new Vauth();
+    assert.equal(v.VAULT_ADDR, 'https://late.example.test');
+    assert.deepEqual(v.RC.extra, {kept : true});
+  } finally {
+    if(previous === undefined) delete process.env.VAUTHRC;
+    else process.env.VAUTHRC = previous;
+  }
+});

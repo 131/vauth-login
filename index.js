@@ -32,8 +32,6 @@ const logger  = {
 
 
 const {name : PACKAGE_NAME, version : VERSION} = require('./package.json');
-const HOME_RC  = path.join(os.homedir(), ".vauthrc");
-const VAUTH_RC = [process.env.VAUTHRC, path.join(process.cwd(), ".vauthrc"), HOME_RC];
 const RC_KEYS  = ['vault_addr', 'ssh_auth', 'jwt_auth', 'token_cache', 'known_vaults'];
 
 const normalizeAddr = addr => trim(String(addr || ''), '/');
@@ -61,6 +59,8 @@ class VauthLogin {
   #vaultToken;
 
   constructor() {
+    const HOME_RC = path.join(os.homedir(), '.vauthrc');
+    const VAUTH_RC = [process.env.VAUTHRC, path.join(process.cwd(), '.vauthrc'), HOME_RC];
     // A project may pin the vauth-login version it expects.
     // Only vauth-login itself is checked, against the running version.
     let manifest = path.resolve('package.json');
@@ -76,6 +76,11 @@ class VauthLogin {
     let document = {};
     if(this.#rcFile)
       document = parse(fs.readFileSync(this.#rcFile, 'utf8')) || {};
+    JSON.stringify(document, (key, value) => {
+      if(typeof value === 'number' && !Number.isFinite(value))
+        throw new Error('Configuration is not JSON-compatible');
+      return value;
+    });
     const snapshot = freeze(document);
 
     const auth = {};
@@ -160,7 +165,9 @@ class VauthLogin {
     console.error('Vauth token: %s · %s', operation, validity);
   }
 
-  async Connect(renew = false) {
+  async Connect(renew = false) /**
+   * @interactive_runner hide
+   */ {
     if(this._connected && !renew)
       return this.#vaultToken;
 

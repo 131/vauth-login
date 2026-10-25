@@ -17,7 +17,7 @@
     "mout": "^1.2.4",
     "nyks": "^6.17.0",
     "semver": "^7.5.4",
-    "ssh-agent-crypt": "^1.4.2",
+    "ssh-agent-crypt": "^1.4.3",
     "ssh2": "^1.16.0",
     "yaml": "^2.6.1"
   },

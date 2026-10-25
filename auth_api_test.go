@@ -265,3 +265,20 @@ extra: [one, two]
 	json.Unmarshal([]byte(f.requests[0].Body), &payload)
 	equal(t, payload["role"], "actual-role")
 }
+
+func TestRCSnapshotMatchesJSONCompatibleNodeValues(t *testing.T) {
+	rc, err := ParseRC([]byte("extra: {date: 2026-01-01, timestamp: 2026-01-01T00:00:00Z, yes: yes}\n"), "fixture", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := &Vauth{rc: *rc}
+	extra := v.RC()["extra"].(map[string]any)
+	equal(t, extra["date"].(string), "2026-01-01")
+	equal(t, extra["timestamp"].(string), "2026-01-01T00:00:00Z")
+	equal(t, extra["yes"].(string), "yes")
+	for _, body := range []string{"extra: [.inf]\n", "extra: [.nan]\n"} {
+		if _, err := ParseRC([]byte(body), "fixture", nil); err == nil || err.Error() != "Configuration is not JSON-compatible" {
+			t.Fatalf("unsupported JSON values: %v", err)
+		}
+	}
+}

@@ -282,6 +282,16 @@ func KnownVault(addr, home string, environ map[string]string) bool {
 	return false
 }
 
+// YAML timestamps stay strings, as they do in the Node YAML parser.
+func timestampStrings(node *yaml.Node) {
+	if node.Tag == "!!timestamp" {
+		node.Tag = "!!str"
+	}
+	for _, child := range node.Content {
+		timestampStrings(child)
+	}
+}
+
 // ParseRC parses a .vauthrc body and expands its $${env.X} macros against
 // environ for the private authentication view; the complete JSON document is retained.
 func ParseRC(body []byte, file string, environ map[string]string) (*RC, error) {
@@ -296,13 +306,14 @@ func ParseRC(body []byte, file string, environ map[string]string) (*RC, error) {
 	if root.Kind != yaml.MappingNode {
 		return nil, fmt.Errorf("Could not parse %s: expected a mapping", file)
 	}
+	timestampStrings(&document)
 	var complete map[string]any
 	if err := document.Decode(&complete); err != nil {
 		return nil, fmt.Errorf("Could not parse %s: %w", file, err)
 	}
 	jsonDocument, err := json.Marshal(complete)
 	if err != nil {
-		return nil, fmt.Errorf("Could not represent %s as JSON: %w", file, err)
+		return nil, fmt.Errorf("Configuration is not JSON-compatible")
 	}
 	var content []*yaml.Node
 	for i := 0; i+1 < len(root.Content); i += 2 {
