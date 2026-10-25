@@ -5,7 +5,7 @@ module github.com/131/vauth-login
 go 1.22
 
 require (
-	github.com/131/ssh-agent-crypt v1.4.1
+	github.com/131/ssh-agent-crypt v1.4.2
 	github.com/Masterminds/semver/v3 v3.5.0
 	golang.org/x/crypto v0.31.0
 	gopkg.in/yaml.v3 v3.0.1

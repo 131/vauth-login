@@ -38,3 +38,17 @@ jobs:
         if: runner.os == 'Linux'
       - run: go build ./cmd/vauth-login
         if: runner.os == 'Windows'
+
+  runtime-node16:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '16.x'
+      - run: npm install --omit=dev --ignore-scripts --engine-strict --no-audit
+      - run: |
+          node --check index.js
+          node --check bin/vauth-login.js
+          node -e "require('./index.js')"
+          node bin/vauth-login.js --version

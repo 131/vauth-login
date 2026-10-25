@@ -1,5 +1,8 @@
 # vauth-login
 
+Node.js 16 or newer is supported; CI includes Node 16 JavaScript syntax and
+module/CLI loading checks alongside the existing test suites.
+
 ## A Vault token, ready to use
 
 Authenticate to [Vault](https://developer.hashicorp.com/vault/docs) with your
@@ -168,7 +171,9 @@ Two fresh independent source assessments cover the published 1.1.4 release:
 Both were generated on October 25, 2026 from clean release commit `b80d311`
 (tag `v1.1.4`), **after publication**, as requested. These reports are published
 on the repository's main branch, not retroactively inserted into the release
-tag or npm tarball; the tagged README retains the earlier 1.1.3 assessments.
+tag or npm tarball of 1.1.4; that tagged README retains the earlier 1.1.3
+assessments. Subsequent Node 16 compatibility updates are outside that assessed
+commit.
 
 The host confirmed models `claude-fable-5-1` and `gpt-6.1-sol_codeassist`, exact
 inputs, source immutability and read exclusions. Claude prepared the Sol stdin;

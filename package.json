@@ -15,9 +15,9 @@
   "dependencies": {
     "debug": "^4.3.4",
     "mout": "^1.2.4",
-    "nyks": "^6.16.2",
+    "nyks": "^6.17.0",
     "semver": "^7.5.4",
-    "ssh-agent-crypt": "^1.4.1",
+    "ssh-agent-crypt": "^1.4.2",
     "ssh2": "^1.16.0",
     "yaml": "^2.6.1"
   },
@@ -37,5 +37,8 @@
     "bin/vauth-login.js",
     "README.md",
     "API_and_tests.md"
-  ]
+  ],
+  "engines": {
+    "node": ">=16"
+  }
 }

@@ -11,6 +11,7 @@ const semver     = require('semver');
 const trim       = require('mout/string/trim');
 const eachLimit = require('nyks/async/eachLimit');
 const walk       = require('nyks/object/walk');
+const structuredClone = require('nyks/object/structuredClone');
 const freeze     = require('nyks/object/freeze');
 const humanDiff  = require('nyks/date/humanDiff');
 

@@ -10,6 +10,7 @@ const {execFile, spawnSync} = require('child_process');
 const {promisify, format} = require('util');
 const exec = promisify(execFile);
 const Vauth = require('../index');
+const structuredClone = require('nyks/object/structuredClone');
 
 const {encrypt, decrypt} = require('ssh-agent-crypt');
 const readCache = async file => JSON.parse(await decrypt(fs.readFileSync(file, 'utf8')));
