@@ -156,6 +156,12 @@ Two independent source assessments:
 [SECURITY_AUDIT_fable-5.1.md](SECURITY_AUDIT_fable-5.1.md) and
 [SECURITY_AUDIT_gpt-6.1-sol.md](SECURITY_AUDIT_gpt-6.1-sol.md).
 
+| Criterion | Claude Fable 5.1 | GPT 6.1 Sol |
+| --- | ---: | ---: |
+| ✨ **Coolness** | 15/20 | 17/20 |
+| Robustness | 13/20 | 13/20 |
+| Safety | 13/20 | 12/20 |
+
 The assessments are source-only reviews, not certification or live
 vulnerability-database clearance. Review each report's evidence, hypotheses
 and check-scope limitations before interpreting its scores.

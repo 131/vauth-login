@@ -30,6 +30,9 @@ address. Node returns one recursively frozen snapshot; Go returns an independent
 JSON snapshot rather than a shared mutable map. Copy the sections you need before
 expanding macros in embedding code.
 
+The instance is not frozen/sealed before subclass construction; subclasses may add their
+own state after `super()`.
+
 Node construction keeps the normal environment and file flow: `VAUTHRC`,
 `./.vauthrc`, then `~/.vauthrc`. Home and cache paths use the native user home;
 agent selection reads `SSH_AUTH_SOCK` at use time.
