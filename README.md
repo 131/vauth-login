@@ -47,7 +47,8 @@ export VAULT_TOKEN=$(vauth-login)
 ```
 
 The token is written raw to stdout, without a trailing newline. Status goes to
-stderr, for example `Vauth token: reused · 11h`.
+stderr, for example `Vauth token: reused · 11h`. The CLI writes a final newline
+to stderr after the token so the terminal prompt starts on its own line.
 
 Force a fresh login:
 

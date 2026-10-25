@@ -99,17 +99,17 @@ func TestCLI(t *testing.T) {
 	home, dir, rcEnv = filepath.Dir(rc), filepath.Dir(rc), rc
 	for _, args := range [][]string{nil, {"--renew"}} {
 		stdout, stderr, err := call(args...)
-		if err != nil || stdout != "fixture-token" || stderr != "Vauth token: generated · 1h\n" {
+		if err != nil || stdout != "fixture-token" || stderr != "Vauth token: generated · 1h\n\n" {
 			t.Fatalf("%v: stdout=%q stderr=%q err=%v", args, stdout, stderr, err)
 		}
 	}
 	inherited = "inherited-token"
 	stdout, stderr, err := call()
-	if err != nil || stdout != "inherited-token" || stderr != "Vauth token: inherited\n" {
+	if err != nil || stdout != "inherited-token" || stderr != "Vauth token: inherited\n\n" {
 		t.Fatalf("inherited: stdout=%q stderr=%q err=%v", stdout, stderr, err)
 	}
 	stdout, stderr, err = call("--renew")
-	if err != nil || stdout != "fixture-token" || stderr != "Vauth token: generated · 1h\n" {
+	if err != nil || stdout != "fixture-token" || stderr != "Vauth token: generated · 1h\n\n" {
 		t.Fatalf("inherited --renew: stdout=%q stderr=%q err=%v", stdout, stderr, err)
 	}
 	inherited = ""

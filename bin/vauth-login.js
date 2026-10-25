@@ -19,7 +19,7 @@ async function main() {
   const token = await new VauthLogin().Connect(args.includes('--renew'));
   if(!token)
     throw new Error('Could not login to vault: no authentication method available');
-  process.stdout.write(token);
+  process.stdout.write(token, () => process.stderr.write('\n'));
 }
 
 main().catch(err => {

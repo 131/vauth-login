@@ -128,6 +128,8 @@ vauth-login [--renew] [--version] [--help]
 - `--help`: print usage on stdout without loading configuration or credentials.
 - Information flags take precedence: `--help`, then `--version`, then login.
 - Token output is raw stdout, without a newline; status/errors go to stderr.
+  After successfully writing a token, the CLI writes a newline to stderr for
+  terminal display. SDK calls do not add this newline.
 - Other arguments, aliases, and `--flag=value` forms are rejected before
   configuration loading or credential output. No token available: exit 1.
 

@@ -67,6 +67,9 @@ func run(argv []string) error {
 	if token == "" {
 		return fmt.Errorf("Could not login to vault: no authentication method available")
 	}
-	_, err = fmt.Fprint(os.Stdout, token)
+	if _, err = fmt.Fprint(os.Stdout, token); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(os.Stderr)
 	return err
 }

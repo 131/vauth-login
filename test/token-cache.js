@@ -817,12 +817,12 @@ test('standalone CLI outputs a token and reuses cache', async t => {
   const env = {...process.env, HOME : home, VAUTHRC : rc, VAULT_TOKEN : ''};
   const initial = await exec(process.execPath, [cli, '--renew'], {cwd : home, env});
   assert.equal(initial.stdout, 'fresh-token');
-  assert.match(initial.stderr, /^Vauth token: generated · 1d\n$/);
+  assert.match(initial.stderr, /^Vauth token: generated · 1d\n\n$/);
   const armor = fs.readFileSync(file, 'utf8');
   assert.match(armor, /^ssh-agent-crypt:v3:/);
   const reused = await exec(process.execPath, [cli], {cwd : home, env});
   assert.equal(reused.stdout, initial.stdout);
-  assert.match(reused.stderr, /^Vauth token: reused · /);
+  assert.match(reused.stderr, /^Vauth token: reused · .*\n\n$/);
   assert.equal(fs.readFileSync(file, 'utf8'), armor);
   assert.deepEqual(requests.map(r => r.path), ['/v1/auth/jwt/login']);
 });
@@ -924,7 +924,7 @@ test('CLI returns an inherited token as is, announcing it on stderr only', async
     cwd : directory, env : {...process.env, HOME : directory, VAUTHRC : rc, VAULT_TOKEN : 'inherited-token'},
   });
   assert.equal(stdout, 'inherited-token');
-  assert.equal(stderr, 'Vauth token: inherited\n');
+  assert.equal(stderr, 'Vauth token: inherited\n\n');
 });
 
 test('transport deadline cancels a request waiting for response headers', async t => {
@@ -992,7 +992,7 @@ test('only --renew forces login instead of returning inherited credentials', asy
   const options = {cwd : home, env : {...process.env, HOME : home, VAUTHRC : rc, VAULT_TOKEN : 'inherited-token'}};
   const reused = await exec(process.execPath, [cli], options);
   assert.equal(reused.stdout, 'inherited-token');
-  assert.equal(reused.stderr, 'Vauth token: inherited\n');
+  assert.equal(reused.stderr, 'Vauth token: inherited\n\n');
   assert.deepEqual(requests, []);
   const renewed = await exec(process.execPath, [cli, '--renew'], options);
   assert.equal(renewed.stdout, 'fresh-token');
