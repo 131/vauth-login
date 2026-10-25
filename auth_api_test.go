@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -22,7 +23,7 @@ func TestAuthenticationOnlyRC(t *testing.T) {
 	}
 	equal(t, rc.SSHAuth.Role, "test-role")
 	equal(t, rc.VaultAddr, "https://vault.example.test")
-	equal(t, rc.AuthKey(), `"ssh_auth":{"role":"test-role"}`)
+	equal(t, rc.AuthKey(), `ssh/test-role//`)
 }
 
 func TestConfigurationPrecedence(t *testing.T) {
@@ -280,5 +281,89 @@ func TestRCSnapshotMatchesJSONCompatibleNodeValues(t *testing.T) {
 		if _, err := ParseRC([]byte(body), "fixture", nil); err == nil || err.Error() != "Configuration is not JSON-compatible" {
 			t.Fatalf("unsupported JSON values: %v", err)
 		}
+	}
+}
+
+func TestAuthKeyDoesNotDependOnYAMLOrder(t *testing.T) {
+	first, err := ParseRC([]byte("ssh_auth: {role: alice, path: ssh}\njwt_auth: {jwt: fixture-jwt, role: bob, path: jwt}\n"), "first", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := ParseRC([]byte("jwt_auth: {path: jwt, role: bob, jwt: fixture-jwt}\nssh_auth: {path: ssh, role: alice}\n"), "second", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, first.AuthKey(), second.AuthKey())
+	other := *second
+	credential := *second.JWTAuth
+	credential.JWT = "another-fixture-jwt"
+	other.JWTAuth = &credential
+	if first.AuthKey() == other.AuthKey() {
+		t.Fatal("different JWTs share an auth key")
+	}
+	equal(t, first.SSHAuth.hash(), "ssh/alice/ssh")
+	equal(t, first.JWTAuth.hash(), "jwt/bob/jwt/fixture-jwt")
+}
+
+func TestRCWalkPreservesKeysAndExpandsAliases(t *testing.T) {
+	body := []byte("extra: &auth {role: '$${env.ROLE}'}\nssh_auth: *auth\njwt_auth: {'$${env.FIELD}': ignored, role: '$${env.ROLE}', jwt: fixture-jwt}\n")
+	rc, err := ParseRC(body, "fixture", map[string]string{"ROLE": "actual-role", "FIELD": "path"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, rc.SSHAuth.Role, "actual-role")
+	equal(t, rc.JWTAuth.Role, "actual-role")
+	equal(t, rc.JWTAuth.Path, "")
+	v := &Vauth{rc: *rc}
+	equal(t, v.RC()["extra"].(map[string]any)["role"], "$${env.ROLE}")
+}
+
+func TestCacheCompositionMatchesNodeSDK(t *testing.T) {
+	node, err := exec.LookPath("node")
+	if err != nil {
+		t.Skip("Node is not installed")
+	}
+	if exec.Command(node, "-e", "require.resolve('ssh2')").Run() != nil {
+		t.Skip("npm dependencies are not installed")
+	}
+	cases := []string{
+		`{"vault_addr":"https://vault.example.test/"}`,
+		`{"vault_addr":"https://vault.example.test","ssh_auth":{"role":"alice"}}`,
+		`{"vault_addr":"https://vault.example.test","ssh_auth":{"role":"alice","path":"ssh"}}`,
+		`{"vault_addr":"https://vault.example.test","ssh_auth":{"path":"ssh","role":"alice"}}`,
+		`{"vault_addr":"https://vault.example.test","jwt_auth":{"role":"r","path":"jwt","jwt":"fixture-jwt"}}`,
+		`{"vault_addr":"https://vault.example.test","jwt_auth":{"jwt":"fixture-jwt","path":"jwt","role":"r"}}`,
+		`{"vault_addr":"https://vault.example.test","jwt_auth":{"jwt":"other-fixture-jwt","path":"jwt","role":"r"}}`,
+		`{"vault_addr":"https://vault.example.test","jwt_auth":{"role":"a/b","path":"c","jwt":"fixture-jwt"}}`,
+		`{"vault_addr":"https://vault.example.test","jwt_auth":{"role":"a","path":"b/c","jwt":"fixture-jwt"}}`,
+		`{"vault_addr":"https://vault.example.test","ssh_auth":{"role":"é😀\"\n","path":"ssh"},"jwt_auth":{"role":"r","jwt":"fixture-jwt"}}`,
+		`{"vault_addr":"https://vault.example.test","ssh_auth":null,"jwt_auth":null}`,
+		`{"vault_addr":"https://vault.example.test","jwt_auth":{"role":"r","jwt":"fixture-jwt","unrelated":"ignored"}}`,
+	}
+	body, err := json.Marshal(cases)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(node, "-e", `const fs = require('fs'); const path = require('path'); const VauthLogin = require('./index.js'); const cases = JSON.parse(fs.readFileSync(0, 'utf8')); const directory = process.argv[1]; process.chdir(directory); const hashes = cases.map((body, i) => { const file = path.join(directory, i + '.json'); fs.writeFileSync(file, body); process.env.VAUTHRC = file; return new VauthLogin()._token_cache_key(); }); process.stdout.write(JSON.stringify(hashes));`, t.TempDir())
+	cmd.Env = append(os.Environ(), "VAULT_ADDR=", "VAULT_TOKEN=")
+	cmd.Stdin = bytes.NewReader(body)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Node SDK: %v: %s", err, output)
+	}
+	var hashes []string
+	if err := json.Unmarshal(output, &hashes); err != nil {
+		t.Fatal(err)
+	}
+	if len(hashes) != len(cases) {
+		t.Fatal("Node returned a different hash count")
+	}
+	for i, body := range cases {
+		rc, err := ParseRC([]byte(body), "fixture", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v := &Vauth{rc: *rc, vaultAddr: rc.VaultAddr}
+		equal(t, v.tokenCacheKey(), hashes[i])
 	}
 }

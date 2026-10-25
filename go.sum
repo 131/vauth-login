@@ -1,9 +1,7 @@
-github.com/131/ssh-agent-crypt v1.4.1 h1:Ng6+kKhFkk6XvpCLT8+VhWH9J5wwh1wq4NlHsZwa4NA=
-github.com/131/ssh-agent-crypt v1.4.1/go.mod h1:XNiI2n3+2NTwjhyd/plFhrd0vSfWOZ58ocvqTlx1Ydk=
-github.com/131/ssh-agent-crypt v1.4.2 h1:e0srAUvSwbPaZXjkE2qY5OCWKxXNTCOVOVWyfrxhTM4=
-github.com/131/ssh-agent-crypt v1.4.2/go.mod h1:/YBOMh8URU2lc5kTxjTDftcVrJqGv1SIpo0TjwNQPCA=
-github.com/131/ssh-agent-crypt v1.4.3 h1:80qMuR6gQwS7QpC2OUR4LAJMwWbSeHXRdfxL+wxyrTg=
-github.com/131/ssh-agent-crypt v1.4.3/go.mod h1:wGd2XWHb6aJYdQZPlltxVkcx3E97Rx8ha3o4daHL3Cs=
+github.com/131/nyks/v6 v6.18.0 h1:xpjRJk2YAyoqqgSvWrox0eIGZ1AY4IkEvqETavcwcQk=
+github.com/131/nyks/v6 v6.18.0/go.mod h1:ckNI5ql4USp+kQyrG1c35tl/PrPSgpoNXktcnQGJpdk=
+github.com/131/ssh-agent-crypt v1.4.4 h1:6MlDUao1Yq6iNY4Bgin/iZp2q3X/g6qD6H1X4ad8ukY=
+github.com/131/ssh-agent-crypt v1.4.4/go.mod h1:/THxpIdVrEAHxNoc6t6lVYBsSEd1zkCROPZepDe8QTI=
 github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=

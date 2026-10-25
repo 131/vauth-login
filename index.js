@@ -115,10 +115,17 @@ class VauthLogin {
   }
 
   _token_cache_key() {
+    const authHash = (kind, auth) => {
+      if(!auth)
+        return '';
+      const fields = [auth.role || '', auth.path || ''];
+      if(kind === 'jwt')
+        fields.push(auth.jwt || '');
+      return kind + '/' + fields.join('/');
+    };
     const {ssh_auth, jwt_auth} = this.#rc;
-    return createHash('sha256').update(JSON.stringify({
-      vault_addr : trim(this.#VAULT_ADDR || '', '/'), ssh_auth, jwt_auth,
-    })).digest('hex');
+    const key = [trim(this.#VAULT_ADDR || '', '/'), authHash('ssh', ssh_auth), authHash('jwt', jwt_auth)].join('/');
+    return createHash('sha256').update(key).digest('hex');
   }
 
   _token_cache_file() {

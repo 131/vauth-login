@@ -106,7 +106,9 @@ login, renewal and `LookupSelf()`. Unknown project-selected addresses are refuse
 `Renewable`, `CreationTTL`, `EntityID`, and `LeaseDuration`.
 `Request(method, path, token, payload, expect)` returns `(status, body, error)`;
 `expect = 0` lets the caller handle statuses. `HTTPError` exposes `Status`/`Body`.
-`LocateRC`, `ParseRC`, `Environ` and `HumanDiff` support embedding. URL
+`LocateRC`, `ParseRC` and `Environ` support embedding. Generic Go helpers
+(`ReplaceEnv`, `Jqdive`, `Walk`, `HumanDiff`) belong to `github.com/131/nyks/v6`,
+not this authentication API. URL
 construction, cache-key and cache-path helpers are implementation details, not
 public client methods.
 
@@ -176,3 +178,13 @@ against the same cache without logging any token. On Windows,
 clear `SSH_AUTH_SOCK` too to exercise Pageant autodiscovery. Verify the installed
 EXE's Authenticode signature and compare both installed binaries to the release's
 `SHA256SUMS`; do not install a locally cross-built unsigned EXE.
+
+
+## Cache identity
+
+Both implementations apply one SHA-256 to a simple scalar concatenation:
+Vault address, `ssh/role/path`, and `jwt/role/path/JWT`, separated by `/`.
+No JSON serialization or quoting participates in the cache key.
+Field order in the source configuration and unrelated fields do not affect
+this identity. The encrypted cache contains the Vault token and lease metadata, not the JWT.
+Generic utilities and cache identity are independent of the authentication method.

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	nyksdate "github.com/131/nyks/v6/date"
 	sshagentcrypt "github.com/131/ssh-agent-crypt"
 	"github.com/Masterminds/semver/v3"
 )
@@ -193,7 +194,7 @@ func (v *Vauth) debug(format string, args ...any) {
 func (v *Vauth) tokenStatus(operation string, token *token) {
 	validity := "valid indefinitely"
 	if token.TTL != 0 {
-		validity = HumanDiff(token.TTL, 2)
+		validity = nyksdate.HumanDiff(token.TTL, 2)
 	}
 	fmt.Fprintf(v.stderr(), "Vauth token: %s · %s\n", operation, validity)
 }

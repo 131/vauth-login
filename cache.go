@@ -23,11 +23,8 @@ type tokenCache struct {
 // tokenCacheKey isolates cached tokens by Vault address and authentication
 // configuration. It matches the Node implementation byte for byte.
 func (v *Vauth) tokenCacheKey() string {
-	key := `{"vault_addr":` + string(jsonString(strings.Trim(v.vaultAddr, "/")))
-	if auth := v.rc.AuthKey(); auth != "" {
-		key += "," + auth
-	}
-	digest := sha256.Sum256([]byte(key + "}"))
+	key := strings.Trim(v.vaultAddr, "/") + "/" + v.rc.AuthKey()
+	digest := sha256.Sum256([]byte(key))
 	return hex.EncodeToString(digest[:])
 }
 

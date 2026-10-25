@@ -6,6 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const http = require('http');
+const {createHash} = require('crypto');
 const {execFile, spawnSync} = require('child_process');
 const {promisify, format} = require('util');
 const exec = promisify(execFile);
@@ -1205,4 +1206,16 @@ test('configuration discovery uses the environment at construction like Go New',
     if(previous === undefined) delete process.env.VAUTHRC;
     else process.env.VAUTHRC = previous;
   }
+});
+
+
+test('cache identity uses explicit auth fields, independent of property order', async t => {
+  const {client} = await fixture(t);
+  const first = client({rc : {jwt_auth : {role : 'r', path : 'jwt', jwt : 'fixture-jwt'}}});
+  const second = client({rc : {jwt_auth : {jwt : 'fixture-jwt', path : 'jwt', role : 'r'}}});
+  assert.equal(first._token_cache_key(), second._token_cache_key());
+  const third = client({rc : {jwt_auth : {role : 'r', path : 'jwt', jwt : 'other-fixture-jwt'}}});
+  assert.notEqual(first._token_cache_key(), third._token_cache_key());
+  const scalar = [first.VAULT_ADDR.replace(/^\/+|\/+$/g, ''), '', 'jwt/r/jwt/fixture-jwt'].join('/');
+  assert.equal(first._token_cache_key(), createHash('sha256').update(scalar).digest('hex'));
 });

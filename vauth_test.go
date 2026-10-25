@@ -377,18 +377,17 @@ func TestCacheIsolation(t *testing.T) {
 }
 
 func TestTokenCacheKeyMatchesNode(t *testing.T) {
-	// sha256 of JSON.stringify({vault_addr, ssh_auth, jwt_auth}) as the Node
-	// implementation renders it (undefined members omitted).
+	// A single SHA-256 covers the Vault and tagged, explicit authentication fields.
 	v := &Vauth{vaultAddr: "https://vault.example.test/", rc: RC{SSHAuth: &SSHAuth{Role: "alice"}}}
-	equal(t, v.tokenCacheKey(), sha256Hex(`{"vault_addr":"https://vault.example.test","ssh_auth":{"role":"alice"}}`))
+	equal(t, v.tokenCacheKey(), sha256Hex(`https://vault.example.test/ssh/alice//`))
 	v = &Vauth{vaultAddr: "https://vault.example.test", rc: RC{JWTAuth: &JWTAuth{Path: "jwt", JWT: "x", Role: "r"}}}
-	equal(t, v.tokenCacheKey(), sha256Hex(`{"vault_addr":"https://vault.example.test","jwt_auth":{"path":"jwt","jwt":"x","role":"r"}}`))
+	equal(t, v.tokenCacheKey(), sha256Hex(`https://vault.example.test//jwt/r/jwt/x`))
 	rc, err := ParseRC([]byte("vault_addr: https://vault.example.test\nssh_auth:\n  role: $${env.USER}\n"), ".vauthrc", map[string]string{"USER": "bob"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	v = &Vauth{vaultAddr: rc.VaultAddr, rc: *rc}
-	equal(t, v.tokenCacheKey(), sha256Hex(`{"vault_addr":"https://vault.example.test","ssh_auth":{"role":"bob"}}`))
+	equal(t, v.tokenCacheKey(), sha256Hex(`https://vault.example.test/ssh/bob//`))
 }
 
 func TestRepeatedConnectReusesConnection(t *testing.T) {
@@ -710,20 +709,6 @@ func TestUnknownVaultRejected(t *testing.T) {
 	equal(t, load().unknownVault, false)
 	write(home, "vault_addr: https://other.example.test\n")
 	equal(t, load().unknownVault, true)
-}
-
-func TestReplaceEnv(t *testing.T) {
-	dict := Lookup{"env": map[string]string{"USER": "alice"}, "profile": map[string]any{"TOKEN": "secret", "N": 3}}
-	equal(t, ReplaceEnv("$${env.USER}", dict), "alice")
-	equal(t, ReplaceEnv("x-$${profile.TOKEN}-$${profile.N}", dict), "x-secret-3")
-	equal(t, ReplaceEnv("$${profile.MISSING}", dict), "$${profile.MISSING}") // unresolved macros are kept, like nyks
-	equal(t, ReplaceEnv("plain", dict), "plain")
-}
-
-func TestHumanDiff(t *testing.T) {
-	equal(t, HumanDiff(0, 2), "0s")
-	equal(t, HumanDiff(59, 2), "59s")
-	equal(t, HumanDiff(3600*24*31, 2), "1month 1d")
 }
 
 func sha256Hex(value string) string {
