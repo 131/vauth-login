@@ -1,6 +1,6 @@
 module github.com/131/vauth-login
 
-// version: 1.1.8
+// version: 1.2.0
 
 go 1.22
 
