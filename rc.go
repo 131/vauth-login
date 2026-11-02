@@ -148,5 +148,8 @@ func ParseRC(body []byte, file string, environ map[string]string) (*RC, error) {
 	if err := json.Unmarshal(body, &rc); err != nil {
 		return nil, fmt.Errorf("Could not parse %s: %w", file, err)
 	}
+	if rc.SSHAuth != nil {
+		rc.SSHAuth.Role = strings.ToLower(rc.SSHAuth.Role)
+	}
 	return &rc, nil
 }

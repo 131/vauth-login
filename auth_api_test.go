@@ -26,6 +26,32 @@ func TestAuthenticationOnlyRC(t *testing.T) {
 	equal(t, rc.AuthKey(), `ssh/test-role//`)
 }
 
+func TestSSHRoleCaseNormalization(t *testing.T) {
+	environ := map[string]string{"SSH_ROLE": "MiXeD.User"}
+	body := []byte("ssh_auth: {role: '$${env.SSH_ROLE}', path: CustomSSH}\njwt_auth: {role: KeepJWTCase, jwt: fixture-jwt}\nextra: '$${env.SSH_ROLE}'\n")
+	rc, err := ParseRC(body, "fixture", environ)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, rc.SSHAuth.Role, "mixed.user")
+	equal(t, rc.SSHAuth.Path, "CustomSSH")
+	equal(t, rc.JWTAuth.Role, "KeepJWTCase")
+	equal(t, environ["SSH_ROLE"], "MiXeD.User")
+	var snapshot map[string]any
+	json.Unmarshal(rc.document, &snapshot)
+	equal(t, snapshot["ssh_auth"].(map[string]any)["role"], "$${env.SSH_ROLE}")
+	literal, err := ParseRC([]byte("ssh_auth: {role: MiXeD.User, path: CustomSSH}\njwt_auth: {role: KeepJWTCase, jwt: fixture-jwt}\n"), "fixture", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, literal.AuthKey(), rc.AuthKey())
+	lower, err := ParseRC([]byte("ssh_auth: {role: mixed.user, path: CustomSSH}\njwt_auth: {role: KeepJWTCase, jwt: fixture-jwt}\n"), "fixture", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	equal(t, lower.AuthKey(), rc.AuthKey())
+}
+
 func TestConfigurationPrecedence(t *testing.T) {
 	home, cwd := t.TempDir(), t.TempDir()
 	explicit := filepath.Join(t.TempDir(), "explicit.vauthrc")

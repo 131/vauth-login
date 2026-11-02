@@ -89,6 +89,8 @@ class VauthLogin {
         auth[key] = document[key];
     }
     this.#rc = walk(structuredClone(auth), value => replaceEnv(value, {env : process.env}));
+    if(typeof this.#rc.ssh_auth?.role === 'string')
+      this.#rc.ssh_auth.role = this.#rc.ssh_auth.role.toLowerCase();
     this.#rc.document = snapshot;
     if(!process.env.SSH_AUTH_SOCK && process.platform !== 'win32')
       this.#rc.token_cache = false;

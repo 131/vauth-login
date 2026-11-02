@@ -89,7 +89,9 @@ async function fixture(t, options = {}) {
       body += chunk;
     requests.push({path : req.url, method : req.method, token : req.headers['x-vault-token'], body});
     res.setHeader('content-type', 'application/json');
-    if(req.url === '/v1/auth/jwt/login') {
+    if(req.url === '/v1/auth/ssh/nonce') {
+      res.end(JSON.stringify({data : {nonce : 'fixture-nonce'}}));
+    } else if(req.url === '/v1/auth/jwt/login' || req.url === '/v1/auth/ssh/login') {
       res.end(JSON.stringify({auth : {client_token : 'fresh-token', lease_duration : 24 * HOUR, renewable : true}}));
     } else if(req.url === '/v1/auth/token/lookup-self') {
       res.statusCode = options.lookup_status || 200;
@@ -145,6 +147,20 @@ test('login persists a token; a new instance reuses it without logging in', asyn
   assert.equal(await second.Connect(), 'fresh-token');
   assert.deepEqual(requests.map(req => req.path), ['/v1/auth/jwt/login']);
   assert.deepEqual(fs.readdirSync(path.dirname(file)), [path.basename(file)]);
+});
+
+test('SSH role is lowercased after expansion, before cache identity and login', async t => {
+  const f = await fixture(t);
+  const mixed = f.client({rc : {ssh_auth : {role : '$${env.SSH_ROLE}', path : 'ssh'}, jwt_auth : null, token_cache : false}, env : {SSH_ROLE : 'MiXeD.User'}});
+  const lower = f.client({rc : {ssh_auth : {role : 'mixed.user', path : 'ssh'}, jwt_auth : null, token_cache : false}});
+  assert.equal(mixed.RC.ssh_auth.role, '$${env.SSH_ROLE}');
+  assert.equal(mixed._token_cache_key(), lower._token_cache_key());
+  assert.equal(await mixed.Connect(true), 'fresh-token');
+  const login = f.requests.find(request => request.path === '/v1/auth/ssh/login');
+  assert.equal(JSON.parse(login.body).role, 'mixed.user');
+  const jwt = f.client({rc : {jwt_auth : {role : 'KeepJWTCase', jwt : 'fixture-jwt'}, token_cache : false}});
+  await jwt.Connect(true);
+  assert.equal(JSON.parse(f.requests.filter(request => request.path === '/v1/auth/jwt/login').pop().body).role, 'KeepJWTCase');
 });
 
 test('a token in the last third of its lease is renewed and saved', async t => {

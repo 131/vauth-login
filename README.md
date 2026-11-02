@@ -90,6 +90,10 @@ ssh_auth:
 token_cache: true
 ```
 
+The resolved `ssh_auth.role` is converted to lowercase before authentication
+and cache identity calculation, whether supplied literally or through a macro.
+JWT roles, paths and the complete parsed `RC` snapshot keep their original case.
+
 Configuration keys: `vault_addr`, `ssh_auth`, `jwt_auth`, `token_cache`, and
 `known_vaults`.
 
