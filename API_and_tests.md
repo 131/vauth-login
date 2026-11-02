@@ -148,3 +148,15 @@ with a throwaway Ed25519 key and a loopback fake Vault; no real Vault or user
 credentials are needed. Linux needs `ssh-agent`, `ssh-keygen`, and `ssh-add`.
 Windows CI checks the native build. Installation validation exercises Pageant
 login on Windows.
+
+## Minimal environment CLI
+
+Both native Go and Node provide `vauth-login env --ir://json` (`env` alone
+also uses JSON). It emits exactly `{VAULT_TOKEN, VAULT_ADDR}` with a newline
+on stdout, and authentication status/errors only on stderr. Bare login still
+emits the raw token without a stdout newline. `--renew` keeps its normal meaning
+and does not bypass SSH signing or Vault trust checks.
+
+Tests cover inherited/fresh/cached token modes, effective address selection,
+no identity/KV exports, SSH signature payloads, informational commands without
+configuration/credentials and rejection of unsupported output formats.

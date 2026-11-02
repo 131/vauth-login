@@ -112,6 +112,23 @@ func TestCLI(t *testing.T) {
 	if err != nil || stdout != "fixture-token" || stderr != "Vauth token: generated · 1h\n\n" {
 		t.Fatalf("inherited --renew: stdout=%q stderr=%q err=%v", stdout, stderr, err)
 	}
+	for _, args := range [][]string{{"env"}, {"env", "--ir://json"}, {"env", "--ir://json", "--renew"}} {
+		stdout, stderr, err = call(args...)
+		var values map[string]string
+		if err != nil || json.Unmarshal([]byte(stdout), &values) != nil {
+			t.Fatalf("JSON env %v: %v", args, err)
+		}
+		want := "inherited-token"
+		if strings.Contains(strings.Join(args, " "), "--renew") {
+			want = "fixture-token"
+		}
+		if len(values) != 2 || values["VAULT_TOKEN"] != want || values["VAULT_ADDR"] != server.URL {
+			t.Fatalf("unexpected JSON env %v", values)
+		}
+		if strings.Contains(stderr, want) || !strings.HasSuffix(stdout, "\n") {
+			t.Fatal("Token leaked to stderr or JSON framing invalid")
+		}
+	}
 	inherited = ""
 	for _, args := range [][]string{{"--version"}, {"--renew", "--version"}} {
 		stdout, stderr, err := call(args...)
@@ -119,7 +136,7 @@ func TestCLI(t *testing.T) {
 			t.Fatalf("version: %q %q %v", stdout, stderr, err)
 		}
 	}
-	for _, args := range [][]string{{"env"}, {"run", "echo"}, {"--bogus"}, {"login"}, {"connect"}, {"version"}, {"help"}, {"--renew=false"}, {"--renew=true"}, {"--source"}, {"--ir://json"}, {"--help", "--bogus"}} {
+	for _, args := range [][]string{{"env", "--ir://yaml"}, {"env", "--source"}, {"--renew", "env"}, {"run", "echo"}, {"--bogus"}, {"login"}, {"connect"}, {"version"}, {"help"}, {"--renew=false"}, {"--renew=true"}, {"--source"}, {"--ir://json"}, {"--help", "--bogus"}} {
 		if _, _, err := call(args...); err == nil {
 			t.Fatalf("invalid command accepted: %v", args)
 		}
@@ -145,6 +162,8 @@ func TestCLIInformationalFlagsIgnoreConfiguration(t *testing.T) {
 		{[]string{"--renew", "--version"}, "1.0.0\n"},
 		{[]string{"--help"}, usage},
 		{[]string{"--renew", "--version", "--help"}, usage},
+		{[]string{"env", "--ir://json", "--version"}, "1.0.0\n"},
+		{[]string{"env", "--help"}, usage},
 	} {
 		cmd := exec.Command(exe, append([]string{"-test.run=TestCLIProcess", "--"}, c.args...)...)
 		cmd.Dir = dir

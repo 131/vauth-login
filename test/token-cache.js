@@ -842,7 +842,33 @@ test('standalone CLI outputs a token and reuses cache', async t => {
   assert.equal(reused.stdout, initial.stdout);
   assert.match(reused.stderr, /^Vauth token: reused · .*\n\n$/);
   assert.equal(fs.readFileSync(file, 'utf8'), armor);
+  const envResult = await exec(process.execPath, [cli, 'env', '--ir://json'], {cwd : home, env});
+  assert.deepEqual(JSON.parse(envResult.stdout), {VAULT_TOKEN : 'fresh-token', VAULT_ADDR : instance.VAULT_ADDR});
+  assert.ok(envResult.stdout.endsWith('\n'));
+  assert.ok(!envResult.stderr.includes('fresh-token'));
+  assert.equal(fs.readFileSync(file, 'utf8'), armor);
   assert.deepEqual(requests.map(r => r.path), ['/v1/auth/jwt/login']);
+});
+
+test('CLI env publishes only Vault token/address and still signs the SSH challenge', async t => {
+  const f = await fixture(t);
+  const instance = f.client({rc : {ssh_auth : {role : 'CLI.User', path : 'ssh'}, jwt_auth : null, token_cache : false}});
+  const home = path.dirname(path.dirname(path.dirname(instance._token_cache_file())));
+  const rc = path.join(home, '.vauthrc');
+  fs.writeFileSync(rc, JSON.stringify({...instance.RC, vault_addr : instance.VAULT_ADDR, env : {map : {EXTRA_SECRET : 'must-not-export'}}, extra : 'not-an-env-export'}));
+  const cli = path.resolve(__dirname, '..', 'bin', 'vauth-login.js');
+  const env = {...process.env, HOME : home, VAUTHRC : rc, VAULT_TOKEN : ''};
+  const signed = await exec(process.execPath, [cli, 'env', '--ir://json', '--renew'], {cwd : home, env});
+  assert.deepEqual(JSON.parse(signed.stdout), {VAULT_TOKEN : 'fresh-token', VAULT_ADDR : instance.VAULT_ADDR});
+  const login = f.requests.find(request => request.path === '/v1/auth/ssh/login');
+  const payload = JSON.parse(login.body);
+  assert.equal(payload.role, 'cli.user');
+  assert.ok(payload.signature && payload.public_key && payload.nonce);
+  assert.ok(!signed.stderr.includes('fresh-token'));
+  assert.deepEqual(f.requests.map(request => request.path), ['/v1/auth/ssh/nonce', '/v1/auth/ssh/login']);
+  const inherited = await exec(process.execPath, [cli, 'env', '--ir://json'], {cwd : home, env : {...env, VAULT_TOKEN : 'inherited-fixture-token'}});
+  assert.deepEqual(JSON.parse(inherited.stdout), {VAULT_TOKEN : 'inherited-fixture-token', VAULT_ADDR : instance.VAULT_ADDR});
+  assert.equal(f.requests.length, 2);
 });
 
 test('constructor ignores unrelated configuration and expands authentication macros only', async t => {
@@ -1073,7 +1099,7 @@ test('--version and --help do not load configuration or use inherited credential
   }
   for(const args of [['--help'], ['--renew', '--version', '--help']]) {
     const result = await exec(process.execPath, [cli, ...args], options);
-    assert.equal(result.stdout, 'Usage: vauth-login [--renew] [--version] [--help]\n');
+    assert.equal(result.stdout, 'Usage: vauth-login [--renew] [--version] [--help]\n       vauth-login env [--ir://json] [--renew] [--version] [--help]\n');
     assert.equal(result.stderr, '');
   }
   await assert.rejects(exec(process.execPath, [cli, '--help', '--bogus'], options), err => {

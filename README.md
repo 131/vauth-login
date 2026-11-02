@@ -50,6 +50,19 @@ The token is written raw to stdout, without a trailing newline. Status goes to
 stderr, for example `Vauth token: reused · 11h`. The CLI writes a final newline
 to stderr after the token so the terminal prompt starts on its own line.
 
+Export only the Vault connection environment as one JSON object, for callers
+that normally use `vauth env --ir://json` but need no profile or secret exports:
+
+```bash
+vauth-login env --ir://json
+```
+
+The result contains exactly `VAULT_TOKEN` and the effective `VAULT_ADDR`.
+`env` defaults to the same JSON output. It uses the normal authentication/cache
+flow, including SSH-agent challenge signing; `--renew` forces fresh login.
+It does not read identity/KV data or interpret `env.map`. Treat stdout as secret
+because it contains the token; diagnostics stay on stderr.
+
 Force a fresh login:
 
 ```bash
@@ -68,11 +81,13 @@ The Node executable is `bin/vauth-login.js`; Node and Go share this CLI:
 
 ```text
 vauth-login [--renew] [--version] [--help]
+vauth-login env [--ir://json] [--renew] [--version] [--help]
 ```
 
 `--version` prints the package/release version and `--help` prints usage, both
-without loading project configuration or credentials. All other arguments,
-aliases, and `--flag=value` forms are rejected. SDK helpers are not CLI commands.
+without loading project configuration or credentials. Apart from the explicit
+`env` command and its `--ir://json` option, unknown arguments/aliases and other
+`--flag=value` forms are rejected. SDK helpers are not CLI commands.
 An unavailable token is an error (exit 1).
 
 ## Configuration
