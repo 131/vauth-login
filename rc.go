@@ -18,8 +18,8 @@ type RC struct {
 	SSHAuth    *SSHAuth `json:"ssh_auth" yaml:"ssh_auth"`
 	JWTAuth    *JWTAuth `json:"jwt_auth" yaml:"jwt_auth"`
 	TokenCache *bool    `json:"token_cache" yaml:"token_cache"`
-	// KnownVaults lists, in ~/.vauthrc, the Vault addresses a project's
-	// ./.vauthrc is allowed to select.
+	// KnownVaults lists, in ~/.vauthrc, the Vault addresses a project or
+	// in-memory RC is allowed to select.
 	KnownVaults []string `json:"known_vaults" yaml:"known_vaults"`
 
 	// document is the unexpanded JSON-compatible configuration snapshot.

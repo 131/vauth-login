@@ -12,7 +12,8 @@ Node and Go use the same client method names and argument order:
 
 Node returns promises for asynchronous operations; Go returns values and an
 error. Node keeps optional argument defaults; Go supplies them explicitly.
-Construction remains `new VauthLogin()` in Node and `New()` in Go. The version
+Default construction remains `new VauthLogin()` in Node and `New()` in Go.
+Go also supports `NewFromRC` for embedding a configuration supplied in memory. The version
 is `VauthLogin.Version()` in Node and the package variable `Version` in Go.
 HTTP/JSON field spelling and native error types remain language-specific.
 
@@ -24,7 +25,7 @@ HTTP/JSON field spelling and native error types remain language-specific.
 | Address | `client.VAULT_ADDR` | `client.VAULT_ADDR()` | Effective address, with the environment fallback |
 | Token | `client.VAULT_TOKEN` | `client.VAULT_TOKEN()` | Current token managed by `Connect` |
 
-`RC` retains the file's original values/macros. Only vauth-login's private authentication
+`RC` retains the supplied configuration’s original values/macros. Only vauth-login's private authentication
 view expands `env` macros. `RC.vault_addr` can therefore differ from the effective
 address. Node returns one recursively frozen snapshot; Go returns an independent
 JSON snapshot rather than a shared mutable map. Copy the sections you need before
@@ -97,6 +98,46 @@ returns an inherited token as is unless `renew` is set. `Request()` checks the
 selected destination before constructing or sending any HTTP request, including
 login, renewal and `LookupSelf()`. Unknown project-selected addresses are refused.
 
+### Go construction from an in-memory RC
+
+```go
+client, err := vauthlogin.NewFromRC(rcBody, environ)
+```
+
+`NewFromRC(body []byte, environ map[string]string) (*Vauth, error)` accepts the
+same YAML/JSON mapping as a file RC. `nil` or empty body produces an empty RC,
+with the usual environment fallback. Invalid content returns a nil client and
+an error. The constructor performs no network calls and does not write the RC
+or token cache to disk.
+
+- `environ == nil` captures the process environment. A non-nil map is the
+  complete caller-provided snapshot for macros, address and inherited token;
+  absent variables do not fall back to process variables. It is copied, not
+  modified. The constructor does not change the process environment.
+- Agent discovery retains native defaults. An explicitly supplied
+  `SSH_AUTH_SOCK` overrides them; an explicit empty value disables the agent
+  and token caching. Home and cache directories use `os.UserHomeDir()`, not
+  `HOME`/`USERPROFILE` in the supplied map. The normal project-version check
+  remains active.
+- `VAUTHRC`, `./.vauthrc` and `~/.vauthrc` are not consulted to select or merge
+  authentication/environment configuration. **The native home `~/.vauthrc`
+  is still read to authorize an inline-selected Vault**, through its
+  `vault_addr` or `known_vaults`, expanded against the supplied environment.
+  A matching environment `VAULT_ADDR` also authorizes the address, as before.
+  `known_vaults` inside the supplied RC cannot authorize its own destination.
+- Trust is determined during construction. An unknown Vault still permits
+  constructing the client and returning an inherited or valid cached token
+  offline; `Request` refuses any network operation to it. An unreadable or
+  invalid home file provides no authorization; it does not supply fallback
+  authentication or exports. Diagnostics identify the RC as `<memory>`.
+- `RC()` remains an independent, complete raw snapshot, including uninterpreted
+  sections needed by a parent SDK such as vvauth. Parsing, role normalization,
+  token handling, cache identity and HTTP behavior are shared with `New()`.
+
+This Go constructor is the embedding contract used by parent SDKs.
+Environment/profile resolution remains owned by vvauth.
+The Node constructor and both CLIs keep their existing contract.
+
 `LookupSelf(token)` validates online and returns `*LookupToken` with `TTL`,
 `Renewable`, `CreationTTL`, `EntityID`, and `LeaseDuration`.
 `Request(method, path, token, payload, expect)` returns `(status, body, error)`;
@@ -142,6 +183,11 @@ go test ./...
 go test -race ./...
 GOOS=windows GOARCH=amd64 go build ./cmd/vauth-login
 ```
+
+`memory_rc_test.go` verifies in-memory parsing, snapshots, environment
+isolation, file-constructor parity, native home/cache defaults, home trust,
+self-authorization refusal and offline inherited tokens. All HTTP tests use
+a loopback fake Vault.
 
 The authentication/cache suites create an isolated SSH agent
 with a throwaway Ed25519 key and a loopback fake Vault; no real Vault or user

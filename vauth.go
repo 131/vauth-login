@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,12 +24,12 @@ import (
 const PackageName = "vauth-login"
 
 // Version is the running version (ldflags -X or debug.ReadBuildInfo), checked
-// by New against the current directory's package.json; empty or non-semver
+// by constructors against the current directory's package.json; empty or non-semver
 // values ("(devel)") skip the check.
 var Version string
 
-// Vauth is a configured client. New builds one from the process environment;
-// authentication data and the selected file path are private.
+// Vauth is a configured client. Constructors load a file or an in-memory RC;
+// authentication data and configuration provenance are private.
 type Vauth struct {
 	rc         RC
 	vaultAddr  string
@@ -46,7 +47,7 @@ type Vauth struct {
 	HTTPClient *http.Client
 	// Now overrides the clock (tests).
 	Now func() time.Time
-	// rcFile is the configuration file New selected, if any.
+	// rcFile identifies the selected file or an in-memory RC in diagnostics.
 	rcFile string
 
 	connected    bool
@@ -122,53 +123,91 @@ func Environ() map[string]string {
 // New loads the configuration from the environment and the first .vauthrc
 // found (VAUTHRC, ./.vauthrc, ~/.vauthrc).
 func New() (*Vauth, error) {
-	environ := Environ()
-	home, err := os.UserHomeDir()
+	v, cwd, err := newClient(nil)
 	if err != nil {
-		return nil, fmt.Errorf("Could not determine user home directory: %w", err)
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("Could not determine working directory: %w", err)
-	}
-	if err := CheckProjectVersion(filepath.Join(cwd, "package.json"), Version); err != nil {
 		return nil, err
 	}
-	v := &Vauth{
-		Agent:      sshagentcrypt.DefaultAgentAddress(),
-		TokenCache: true,
-		HomeDir:    home,
-		CacheDir:   filepath.Join(home, ".vauth", "tokens"),
-		Environ:    environ,
-	}
-	if file := LocateRC(environ, cwd, home); file != "" {
+	if file := LocateRC(v.Environ, cwd, v.HomeDir); file != "" {
 		body, err := os.ReadFile(file)
 		if err != nil {
 			return nil, err
 		}
-		rc, err := ParseRC(body, file, environ)
-		if err != nil {
+		// A project's ./.vauthrc chooses the Vault; the user's home file vouches for it.
+		checkKnown := file == filepath.Join(cwd, ".vauthrc") && file != filepath.Join(v.HomeDir, ".vauthrc")
+		if err := v.loadRC(body, file, checkKnown); err != nil {
 			return nil, err
 		}
-		v.rc = *rc
-		v.rcFile = file
-		// A project's ./.vauthrc chooses the Vault; the user vouches for it in ~/.vauthrc.
-		if file == filepath.Join(cwd, ".vauthrc") && file != filepath.Join(home, ".vauthrc") && rc.VaultAddr != "" {
-			v.unknownVault = !KnownVault(rc.VaultAddr, home, environ)
+	}
+	return v, nil
+}
+
+// NewFromRC loads a YAML/JSON RC supplied in memory instead of discovering a
+// configuration file. A nil environ uses the process environment; otherwise it
+// is copied. Home/cache/agent defaults remain native; SSH_AUTH_SOCK can override
+// the agent. A selected Vault must be vouched for by the user's ~/.vauthrc or
+// environ's VAULT_ADDR before network requests are allowed.
+func NewFromRC(body []byte, environ map[string]string) (*Vauth, error) {
+	v, _, err := newClient(environ)
+	if err != nil {
+		return nil, err
+	}
+	if err := v.loadRC(body, "<memory>", true); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+// newClient establishes the common constructor context without selecting an RC.
+func newClient(environ map[string]string) (*Vauth, string, error) {
+	explicitEnvironment := environ != nil
+	if environ == nil {
+		environ = Environ()
+	} else {
+		environ = maps.Clone(environ)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, "", fmt.Errorf("Could not determine user home directory: %w", err)
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, "", fmt.Errorf("Could not determine working directory: %w", err)
+	}
+	if err := CheckProjectVersion(filepath.Join(cwd, "package.json"), Version); err != nil {
+		return nil, "", err
+	}
+	agent := sshagentcrypt.DefaultAgentAddress()
+	if address, exists := environ["SSH_AUTH_SOCK"]; explicitEnvironment && exists {
+		agent = address
+	}
+	return &Vauth{
+		Agent:      agent,
+		TokenCache: agent != "",
+		HomeDir:    home,
+		CacheDir:   filepath.Join(home, ".vauth", "tokens"),
+		Environ:    environ,
+		vaultAddr:  environ["VAULT_ADDR"],
+		vaultToken: environ["VAULT_TOKEN"],
+	}, cwd, nil
+}
+
+// loadRC shares parsing/defaults; in-memory RCs never authorize their own Vault.
+func (v *Vauth) loadRC(body []byte, file string, checkKnown bool) error {
+	rc, err := ParseRC(body, file, v.Environ)
+	if err != nil {
+		return err
+	}
+	v.rc, v.rcFile = *rc, file
+	if rc.VaultAddr != "" {
+		v.vaultAddr = rc.VaultAddr
+		if checkKnown {
+			v.unknownVault = !KnownVault(rc.VaultAddr, v.HomeDir, v.Environ)
 		}
 	}
-	if v.rc.TokenCache != nil && !*v.rc.TokenCache {
+	if rc.TokenCache != nil && !*rc.TokenCache {
 		v.TokenCache = false
 	}
-	if v.Agent == "" {
-		v.TokenCache = false
-	}
-	v.vaultAddr = v.rc.VaultAddr
-	if v.vaultAddr == "" {
-		v.vaultAddr = environ["VAULT_ADDR"]
-	}
-	v.vaultToken = environ["VAULT_TOKEN"]
-	return v, nil
+	return nil
 }
 
 func (v *Vauth) stderr() io.Writer {
